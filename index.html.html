@@ -1,0 +1,1735 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ระบบจัดการสต๊อก — พาส & อุปกรณ์</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<!-- Firebase CDN compat v10 -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyAoVnK25qpSB2jJEVNQCdYeDiZor0S2_mo",
+    authDomain: "stock-tpe.firebaseapp.com",
+    projectId: "stock-tpe",
+    storageBucket: "stock-tpe.firebasestorage.app",
+    messagingSenderId: "143255428957",
+    appId: "1:143255428957:web:7482e269b9f4d3245f12b4"
+  };
+  try {
+    firebase.initializeApp(firebaseConfig);
+    window._db = firebase.firestore();
+    window._fbReady = true;
+    console.log("✅ Firebase 10.7.1 ready");
+  } catch(e) {
+    console.error("Firebase init error:", e);
+  }
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Sarabun', sans-serif; background: #f5f5f7; color: #2D0A18; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-thumb { background: #F2C4D4; border-radius: 4px; }
+  input, select, textarea, button { font-family: 'Sarabun', sans-serif; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+// ─── CLOUDINARY CONFIG ───
+const CLOUDINARY_CLOUD = "dh98qm0jz";
+const CLOUDINARY_PRESET = "stock_upload";
+const CLOUDINARY_API_KEY = "734231659929297";
+
+// ─── FIREBASE HELPERS (compat) ───
+async function fbSaveItem(item) {
+  if (!window._db) return;
+  await window._db.collection("stockItems").doc(item.id).set(item);
+}
+async function fbDeleteItem(id) {
+  if (!window._db) return;
+  await window._db.collection("stockItems").doc(id).delete();
+}
+async function fbSaveUser(user) {
+  if (!window._db) return;
+  await window._db.collection("users").doc(user.id).set(user);
+}
+async function fbDeleteUser(id) {
+  if (!window._db) return;
+  await window._db.collection("users").doc(id).delete();
+}
+async function fbLoadAll(collName) {
+  if (!window._db) return [];
+  const snap = await window._db.collection(collName).get();
+  return snap.docs.map(d => d.data());
+}
+
+async function uploadToCloudinary(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("upload_preset", CLOUDINARY_PRESET);
+  fd.append("api_key", CLOUDINARY_API_KEY);
+  const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, { method:"POST", body:fd });
+  const data = await res.json();
+  if (data.secure_url) return data.secure_url;
+  throw new Error(data.error?.message || "Upload failed");
+}
+
+const theme = {
+  primary: "#8B1A4A", secondary: "#C0305A", accent: "#E8527A",
+  light: "#FFF0F5", border: "#F2C4D4", text: "#2D0A18", muted: "#9E6070",
+  white: "#FFFFFF", gradient: "linear-gradient(135deg,#8B1A4A 0%,#C0305A 60%,#E8527A 100%)",
+};
+
+const initialStockItems = [{"id": "140219", "name": "QUICK-CHUCK ATTACHMENT MANUAL/ROBOT SIDE", "category": "Tool Change", "unit": "ชิ้น", "stock": 0, "price": 2450.0}, {"id": "140151", "name": "QUICK-CHUCK ATTACHMENT MANUAL/TOOL SIDE", "category": "Tool Change", "unit": "ชิ้น", "stock": 12, "price": 1498.0}, {"id": "140235", "name": "TOOL CHANGER(ROBOT SIDE) OX-03A", "category": "Tool Change", "unit": "ชิ้น", "stock": 3, "price": 7577.0}, {"id": "140236", "name": "TOOL CHANGER(TOOL SIDE) OX-03AI", "category": "Tool Change", "unit": "ชิ้น", "stock": 2, "price": 2950.0}, {"id": "14262", "name": "TOOL CHANGER(ROBOT SIDE) OX-10B", "category": "Tool Change", "unit": "ชิ้น", "stock": 3, "price": 13102.0}, {"id": "140263", "name": "TOOL CHANGER(TOOL SIDE) OX-10BL", "category": "Tool Change", "unit": "ชิ้น", "stock": 10, "price": 6546.0}, {"id": "140237", "name": "TOOL CHANGER(ROBOT SIDE) OX-05A", "category": "Tool Change", "unit": "ชิ้น", "stock": 4, "price": 8949.0}, {"id": "140238", "name": "TOOL CHANGER(TOOL SIDE) OX-05AL", "category": "Tool Change", "unit": "ชิ้น", "stock": 0, "price": 3594.0}, {"id": "140181", "name": "TOOL CHANGER(ROBOT SIDE) OX-SB", "category": "Tool Change", "unit": "ชิ้น", "stock": 0, "price": 9549.0}, {"id": "140182", "name": "TOOL CHANGER(ROBOT SIDE) OX-SBL", "category": "Tool Change", "unit": "ชิ้น", "stock": 1, "price": 4898.0}, {"id": "140183", "name": "TOOL CHANGER(ROBOT SIDE) OX-LB", "category": "Tool Change", "unit": "ชิ้น", "stock": 0, "price": 12878.0}, {"id": "140186", "name": "TOOL CHANGER(ROBOT SIDE) OX-LBI", "category": "Tool Change", "unit": "ชิ้น", "stock": 0, "price": 6539.0}, {"id": "023113", "name": "RECTANGLE PAD FOR MICRO MINI CYLINDER CPUM-01(SR)", "category": "Gripper", "unit": "ชิ้น", "stock": 16, "price": 161.0}, {"id": "022797", "name": "RECTANGLE PAD FOR MICRO MINI CYLINDER CPUM-01", "category": "Gripper", "unit": "ชิ้น", "stock": 1, "price": 136.0}, {"id": "023336", "name": "RECTANGLE PAD FOR MICRO MINI CYLINDER CP060", "category": "Gripper", "unit": "ชิ้น", "stock": 6, "price": 205.0}, {"id": "023337", "name": "RECTANGLE PAD FOR MICRO MINI CYLINDER CP061", "category": "Gripper", "unit": "ชิ้น", "stock": 3, "price": 206.0}, {"id": "ITEM-017", "name": "Gipper Pad", "category": "Gripper", "unit": "ชิ้น", "stock": 8, "price": 60.0}, {"id": "GX16-8M", "name": "PPLT-GX16-8M", "category": "Gripper", "unit": "ชิ้น", "stock": 6, "price": 350.0}, {"id": "D-M9BV-L2", "name": "Limit Switch D-M9BV L2", "category": "Gripper", "unit": "ชิ้น", "stock": 2, "price": 623.7}, {"id": "D-M9BV-L3", "name": "Limit Switch D-M9BV L3", "category": "Gripper", "unit": "ชิ้น", "stock": 5, "price": 623.7}, {"id": "D-M9BV 3C", "name": "Limit Switch D-M9B 3C", "category": "Gripper", "unit": "ชิ้น", "stock": 20, "price": 624.7}, {"id": "D-M9BV 2C", "name": "Limit Switch D-M9B 2C", "category": "Gripper", "unit": "ชิ้น", "stock": 20, "price": 624.7}, {"id": "BMP1-032", "name": "AUTO SWITCH BRACKET (BMP1-032)", "category": "Gripper", "unit": "ชิ้น", "stock": 6, "price": 7.0}, {"id": "123219", "name": "Mini Cylinder MCD-05", "category": "Gripper", "unit": "ชิ้น", "stock": 7, "price": 387.0}, {"id": "200122", "name": "Mini Cylinder MCD-10", "category": "Gripper", "unit": "ชิ้น", "stock": 4, "price": 463.0}, {"id": "120003", "name": "MINI CYLINDER-H(WITH RUBBER PAD) MCY-HS", "category": "Gripper", "unit": "ชิ้น", "stock": 2, "price": 797.0}, {"id": "370877", "name": "RUBBER PAD W/SCREW FOR H-MINI CYLINDER", "category": "Gripper", "unit": "ชิ้น", "stock": 6, "price": 18.0}, {"id": "MHS3-16D", "name": "AIR GRIPPER MHS3-16D", "category": "Gripper", "unit": "ชิ้น", "stock": 0, "price": 6120.0}, {"id": "123401", "name": "AIR GRIPPER MHZL2-10S", "category": "Gripper", "unit": "ชิ้น", "stock": 2, "price": 4774.0}, {"id": "MHZL2-L16S", "name": "AIR GRIPPER MHZL2-L16S", "category": "Gripper", "unit": "ชิ้น", "stock": 0, "price": 5992.0}, {"id": "022883", "name": "RUNNER CHUCK ES W/SENSOR CHK-ES-08-C", "category": "Gripper", "unit": "ชิ้น", "stock": 2, "price": 6420.0}, {"id": "022882", "name": "RUNNER CHUCK ES W/SENSOR CHK-EM-12-C", "category": "Gripper", "unit": "ชิ้น", "stock": 8, "price": 6551.0}, {"id": "022880", "name": "RUNNER CHUCK ES W/SENSOR CHK-EX-20-C", "category": "Gripper", "unit": "ชิ้น", "stock": 2, "price": 7959.0}, {"id": "072705", "name": "PARALLEL CHCUK 10ST(DOUBLE) HC1-10-C1", "category": "Gripper", "unit": "ชิ้น", "stock": 2, "price": 4606.0}, {"id": "072706", "name": "PARALLEL CHCUK 10ST(DOUBLE) HC1-20-C1", "category": "Gripper", "unit": "ชิ้น", "stock": 0, "price": 7130.0}, {"id": "072709", "name": "LIMIT SWITCH ASSY HC1-SW2", "category": "Gripper", "unit": "ชิ้น", "stock": 0, "price": 327.0}, {"id": "072702", "name": "PARALLEL CHUCK 5ST(SINGLE) HC1-5S-C1", "category": "Gripper", "unit": "ชิ้น", "stock": 0, "price": 4241.0}, {"id": "072703", "name": "PARALLEL CHUCK 5ST(SINGLE) HC1-10S-C1", "category": "Gripper", "unit": "ชิ้น", "stock": 0, "price": 4715.0}, {"id": "072704", "name": "PARALLEL CHUCK20ST(SINGLE) HC1-20S-C1", "category": "Gripper", "unit": "ชิ้น", "stock": 3, "price": 6960.0}, {"id": "023215", "name": "CLAW FOR PARALLEL CHUCK CP-HC10N", "category": "Gripper", "unit": "ชิ้น", "stock": 0, "price": 322.0}, {"id": "023216", "name": "CLAW FOR PARALLEL CHUCK CP-HC20N", "category": "Gripper", "unit": "ชิ้น", "stock": 8, "price": 478.0}, {"id": "293463", "name": "SILICON SPONGE SHEET 1 mm", "category": "Gripper", "unit": "ชิ้น", "stock": 1, "price": 1200.0}, {"id": "ITEM-043", "name": "SILICON SPONGE SHEET 2 mm", "category": "Gripper", "unit": "ชิ้น", "stock": 1, "price": 1300.0}, {"id": "ITEM-044", "name": "SILICON SPONGE SHEET 3 mm", "category": "Gripper", "unit": "ชิ้น", "stock": 1, "price": 1400.0}, {"id": "ITEM-045", "name": "SILICON SPONGE SHEET 4 mm", "category": "Gripper", "unit": "ชิ้น", "stock": 1, "price": 1500.0}, {"id": "371677", "name": "ADHESIVE(CEMEDINE)", "category": "Gripper", "unit": "ชิ้น", "stock": 1, "price": 1185.0}, {"id": "210789", "name": "VAPH-4M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210790", "name": "VAPH-6M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210700", "name": "VAPH-4C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210255", "name": "VAPH-6C", "category": "Section Pad", "unit": "ชิ้น", "stock": 6, "price": 0}, {"id": "210191", "name": "VAPH-8C", "category": "Section Pad", "unit": "ชิ้น", "stock": 21, "price": 0}, {"id": "210615", "name": "VAPH-10C", "category": "Section Pad", "unit": "ชิ้น", "stock": 2, "price": 0}, {"id": "210192", "name": "VAPH-12C", "category": "Section Pad", "unit": "ชิ้น", "stock": 4, "price": 0}, {"id": "210616", "name": "VAPH-14C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210193", "name": "VAPH-15C", "category": "Section Pad", "unit": "ชิ้น", "stock": 5, "price": 0}, {"id": "210194", "name": "VAPH-20C", "category": "Section Pad", "unit": "ชิ้น", "stock": 15, "price": 0}, {"id": "210617", "name": "VAPH-25C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210195", "name": "VAPH-30C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210618", "name": "VAPH-35C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210196", "name": "VAPH-40C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210702", "name": "VAPF-4C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210402", "name": "VAPF-6C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210703", "name": "VAPF-8C", "category": "Section Pad", "unit": "ชิ้น", "stock": 5, "price": 0}, {"id": "210704", "name": "VAPF-10C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210404", "name": "VAPF-12C", "category": "Section Pad", "unit": "ชิ้น", "stock": 2, "price": 0}, {"id": "210706", "name": "VAPF-14C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210405", "name": "VAPF-15C", "category": "Section Pad", "unit": "ชิ้น", "stock": 1, "price": 0}, {"id": "210406", "name": "VAPF-20C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210407", "name": "VAPF-30C", "category": "Section Pad", "unit": "ชิ้น", "stock": 2, "price": 0}, {"id": "210408", "name": "VAPF-40C", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210417", "name": "VAPF-60F", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210280", "name": "VAPH-12C-2", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210310", "name": "VAPH-20C-2", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210897", "name": "VAPH-3C-3", "category": "Section Pad", "unit": "ชิ้น", "stock": 2, "price": 0}, {"id": "210697", "name": "VAPH-15C-3", "category": "Section Pad", "unit": "ชิ้น", "stock": 15, "price": 0}, {"id": "210661", "name": "VAPH-20C-3", "category": "Section Pad", "unit": "ชิ้น", "stock": 1, "price": 0}, {"id": "210662", "name": "VAPH-30C-3", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210663", "name": "VAPH-40C-3", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "196327", "name": "TR-1062-1M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "196342", "name": "TR-1062-2M", "category": "Section Pad", "unit": "ชิ้น", "stock": 4, "price": 0}, {"id": "196406", "name": "TR-1062-3M", "category": "Section Pad", "unit": "ชิ้น", "stock": 1, "price": 0}, {"id": "196405", "name": "TR-1062-4M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "193511", "name": "TR-1062-1", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "193512", "name": "TR-1062-2", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "196135", "name": "TR-1062-3", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "196136", "name": "TR-1062-4", "category": "Section Pad", "unit": "ชิ้น", "stock": 9, "price": 0}, {"id": "210664", "name": "VAPH-8C-SP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210665", "name": "VAPH-12C-SP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210534", "name": "VAPH-15C-SP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210535", "name": "VAPH-20C-SP", "category": "Section Pad", "unit": "ชิ้น", "stock": 4, "price": 0}, {"id": "210536", "name": "VAPH-30C-SP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210537", "name": "VAPH-40C-SP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210914", "name": "VAPH-20C-10-3-SP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210915", "name": "VAPH-30C-15-3-SP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210916", "name": "VAPH-40C-20-3-SP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210859", "name": "VAPH-14C-EPSP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210860", "name": "VAPH-20C-EPSP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210861", "name": "VAPH-30C-EPSP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210862", "name": "VAPH-40C-EPSP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210863", "name": "VAPH-50F-EPSP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "210864", "name": "VAPH-60F-EPSP", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183932", "name": "SSGON 2*4 HT1-M3 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183933", "name": "SSGON 3.5*7 HT1-M3 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183934", "name": "SSGON 5*15 HT1-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183935", "name": "SSGON 6*18 HT1-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183936", "name": "SSGON 8*24 HT1-PT1/8M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183937", "name": "SSGON 10*30 HT1-PT1/8 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183938", "name": "SSGON 15*45 HT1-PT1/8 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183825", "name": "SQN 2 SI-M3 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183826", "name": "SQN 3.5 SI-M3 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183827", "name": "SQN 5 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183828", "name": "SQN 6 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 0}, {"id": "183829", "name": "SQN 8 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 265.0}, {"id": "183830", "name": "SQN 10 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 271.0}, {"id": "183831", "name": "SQN 15 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 271.0}, {"id": "183832", "name": "SQN 20 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 289.0}, {"id": "183833", "name": "SQN 25 SI-PT1/8 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 289.0}, {"id": "183834", "name": "SQN 30 SI-PT1/8 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 1, "price": 319.0}, {"id": "183835", "name": "SQN 35 SI-PT1/8 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 319.0}, {"id": "183836", "name": "SQN 40 SI-PT1/8 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 331.0}, {"id": "183837", "name": "SQN 50 SI-PT1/8 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 343.0}, {"id": "183838", "name": "SQN 60 SI-PT1/8 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 886.0}, {"id": "183839", "name": "SQN 80 SI-PT1/8 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 1030.0}, {"id": "183948", "name": "SSGON 2*4 SI-M3 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 785.0}, {"id": "187223", "name": "SSGON 3.5*7 SI-M3 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 785.0}, {"id": "183950", "name": "SSGON 5*15 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 1435.0}, {"id": "183951", "name": "SSGON 10*30 SI-PT1/8 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 1868.0}, {"id": "183952", "name": "SSGON 15*45 SI-PT1/8 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 1916.0}, {"id": "183874", "name": "SFSGA 11 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 343.0}, {"id": "183875", "name": "SFSGA 14 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 373.0}, {"id": "183876", "name": "SFSGA 16 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 1, "price": 373.0}, {"id": "183877", "name": "SFSGA 20 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 2, "price": 380.0}, {"id": "183878", "name": "SFSGA 22 SI-M5 M", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 386.0}, {"id": "TX6*30", "name": "SUCTION CUP : TX6*30", "category": "Section Pad", "unit": "ชิ้น", "stock": 0, "price": 120.0}, {"id": "131644", "name": "MINI AIR NIPPER W/REVERSED BLADE NW3-35R", "category": "Air Nipper", "unit": "ชิ้น", "stock": 0, "price": 7244.0}, {"id": "131643", "name": "MINI AIR NIPPER W/REVERSED BLADE NW3-35", "category": "Air Nipper", "unit": "ชิ้น", "stock": 15, "price": 5597.0}, {"id": "131645", "name": "MINI AIR NIPPER W/STANDARD LONG BLADE NW3-35-V001S", "category": "Air Nipper", "unit": "ชิ้น", "stock": 0, "price": 12183.0}, {"id": "131646", "name": "MINI AIR NIPPER W/REVERSED LONG BLADE NW3-35R-V001S", "category": "Air Nipper", "unit": "ชิ้น", "stock": 6, "price": 16463.0}, {"id": "131647", "name": "MINI AIR NIPPER W/CLIP TYPE BLADE", "category": "Air Nipper", "unit": "ชิ้น", "stock": 2, "price": 15475.0}, {"id": "U20636610", "name": "10 Air Nipper", "category": "Air Nipper", "unit": "ชิ้น", "stock": 19, "price": 8910.0}, {"id": "ITEM-141", "name": "10 Air Nipper", "category": "Air Nipper", "unit": "ชิ้น", "stock": 12, "price": 14000.0}, {"id": "DLA-NY15R Z", "name": "NY15R Z", "category": "Air Nipper", "unit": "ชิ้น", "stock": 8, "price": 12350.0}, {"id": "DLA-NY10R", "name": "NY10R", "category": "Air Nipper", "unit": "ชิ้น", "stock": 3, "price": 4500.0}, {"id": "DLA-NY10R-Z", "name": "NY10R Z", "category": "Air Nipper", "unit": "ชิ้น", "stock": 3, "price": 11700.0}, {"id": "GT-NY25R", "name": "Nipper-VesselGT-NY25R", "category": "Air Nipper", "unit": "ชิ้น", "stock": 2, "price": 8673.16}, {"id": "GT-NY25", "name": "Nipper-VesselGT-NY25", "category": "Air Nipper", "unit": "ชิ้น", "stock": 1, "price": 8594.34}, {"id": "131536", "name": "SPRING FOR BLADE", "category": "Air Nipper", "unit": "ชิ้น", "stock": 14, "price": 36.0}, {"id": "130769", "name": "PISTON", "category": "Air Nipper", "unit": "ชิ้น", "stock": 0, "price": 95.0}, {"id": "131487", "name": "PISTON PACKING", "category": "Air Nipper", "unit": "ชิ้น", "stock": 0, "price": 136.0}, {"id": "130771", "name": "PISTON SPRING", "category": "Air Nipper", "unit": "ชิ้น", "stock": 0, "price": 89.0}, {"id": "130257", "name": "SLIDE SPRING", "category": "Air Nipper", "unit": "ชิ้น", "stock": 0, "price": 33.0}, {"id": "131255", "name": "SLIDE SPRING(PULL)", "category": "Air Nipper", "unit": "ชิ้น", "stock": 0, "price": 33.0}, {"id": "131102", "name": "CROSS CONNECTOR PHI.8-8", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 378.0}, {"id": "131098", "name": "CROSS CONNECTOR PHI.12-8", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 42, "price": 329.0}, {"id": "131099", "name": "CROSS CONNECTOR PHI.12-12", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 147, "price": 347.0}, {"id": "13100", "name": "CROSS CONNECTOR PHI.20-12", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 105, "price": 459.0}, {"id": "13101", "name": "CROSS CONNECTOR PHI.20-20", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 60, "price": 462.0}, {"id": "131096", "name": "PARALLEL CONNECTOR PHI.8-8", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 377.0}, {"id": "131092", "name": "PARALLEL CONNECTOR PHI.8-12", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 314.0}, {"id": "131093", "name": "PARALLEL CONNECTOR PHI.12-12", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 314.0}, {"id": "131094", "name": "PARALLEL CONNECTOR PHI.20-12", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 459.0}, {"id": "131095", "name": "PARALLEL CONNECTOR PHI.20-20", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 460.0}, {"id": "131125", "name": "ACCESS BRACKET PHI.12-M6", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 360.0}, {"id": "131306", "name": "ATTACHMENT BRACKET PHI.8-M5", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 282.0}, {"id": "131121", "name": "ATTACHMENT BRACKET PHI.8-M6", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 296.0}, {"id": "131305", "name": "ATTACHMENT BRACKET PHI.12-M5", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 283.0}, {"id": "131118", "name": "ATTACHMENT BRACKET PHI.12-M6", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 35, "price": 298.0}, {"id": "131075", "name": "CYLINDER BRACKET PHI.8", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 587.0}, {"id": "131074", "name": "CYLINDER BRACKET PHI.12", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 590.0}, {"id": "131066", "name": "CYLINDER BRACKET PHI.20", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 654.0}, {"id": "131217", "name": "SLIDE BRACKET W PHI.8", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 347.0}, {"id": "131128", "name": "SLIDE BRACKET W PHI.12", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 314.0}, {"id": "131134", "name": "SLIDE BRACKET W PHI.20", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 26, "price": 348.0}, {"id": "131188", "name": "CHUCK BRACKET TH PHI.8", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 476.0}, {"id": "131187", "name": "CHUCK BRACKET TH PHI.12", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 5, "price": 576.0}, {"id": "131176", "name": "BRACKET T PHI.12 FOR MCD", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 415.0}, {"id": "131554", "name": "BRACKET T PHI.20 FOR MCD", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 1, "price": 816.0}, {"id": "131177", "name": "BRACKET T PHI.8 FOR UMCD", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 363.0}, {"id": "131182", "name": "BRACKET TH PHI.8 FOR UMCD", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 5, "price": 412.0}, {"id": "131181", "name": "BRACKET TH PHI.12 FOR MCD", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 8, "price": 511.0}, {"id": "131173", "name": "ROTATION BRACKET M12-12A", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 15, "price": 223.0}, {"id": "131567", "name": "ROTATION BRACKET PHI.12-12AL / N01864-301L", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 4, "price": 393.0}, {"id": "131568", "name": "ROTATION BRACKET PHI.20-20AL", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 0, "price": 586.0}, {"id": "131130", "name": "SLIDE BRACKET 70 W-PHI.12", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 6, "price": 428.0}, {"id": "MSCEB-1015", "name": "AIR NIPPER FIXING BLOCK", "category": "Jungle Gym Parts", "unit": "ชิ้น", "stock": 30, "price": 959.0}, {"id": "210974", "name": "SUCTION CUP (STD/SILICON/BROWN)  VFIL-S-5A", "category": "Section Stem", "unit": "ชิ้น", "stock": 32, "price": 208.0}, {"id": "211041", "name": "SUCTION STEM NON-ROTATE/MINI VFILB2-SSH", "category": "Section Stem", "unit": "ชิ้น", "stock": 12, "price": 430.0}, {"id": "211042", "name": "SUCTION STEM NON-ROTATE/MINI VFILB2-SSH-P12", "category": "Section Stem", "unit": "ชิ้น", "stock": 10, "price": 499.0}, {"id": "211044", "name": "SUCTION STEM NON-ROTATE/MINI VFILB2-SSH-20-P12", "category": "Section Stem", "unit": "ชิ้น", "stock": 6, "price": 599.0}, {"id": "131208", "name": "SUCTION STEM ATTACHMENT HEAD MINI M5", "category": "Section Stem", "unit": "ชิ้น", "stock": 10, "price": 67.0}, {"id": "210785", "name": "SUCTION STEM/MICRO VFILB-M", "category": "Section Stem", "unit": "ชิ้น", "stock": 22, "price": 372.0}, {"id": "210818", "name": "SUCTION STEM/MICRO VFILB-M-P8", "category": "Section Stem", "unit": "ชิ้น", "stock": 12, "price": 481.0}, {"id": "131316", "name": "SUCTION STEM ATTCHMENT HEAD MICRO N01891-201", "category": "Section Stem", "unit": "ชิ้น", "stock": 0, "price": 50.0}, {"id": "210993", "name": "SUCTION STEM NON-ROTATE/ANGLE ADJUSTABLE VFILBR-H-10-P12", "category": "Section Stem", "unit": "ชิ้น", "stock": 4, "price": 980.0}, {"id": "122034", "name": "MANIFOLD MINI", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 65, "price": 238.0}, {"id": "151349", "name": "FITTING PF-M4", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 0, "price": 52.0}, {"id": "190106", "name": "FITTING PF", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 20, "price": 29.0}, {"id": "010473", "name": "FITTING BF-3", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 50, "price": 30.0}, {"id": "190109", "name": "FITTING BF-5", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 100, "price": 29.0}, {"id": "190108", "name": "FITTING BF-6", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 75, "price": 29.0}, {"id": "010482", "name": "FITTING BF-5-M4", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 20, "price": 33.0}, {"id": "010481", "name": "FITTING BF-6-M4", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 20, "price": 38.0}, {"id": "120543", "name": "JOINT M-3ALU-4", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 0, "price": 75.0}, {"id": "101749", "name": "KQ2S04-M3G", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 54, "price": 99.0}, {"id": "101467", "name": "KQ2S04-M5N", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 0, "price": 60.0}, {"id": "101466", "name": "KQ2S06-M5N", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 0, "price": 63.0}, {"id": "101462", "name": "KQ2L04-M5N", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 88, "price": 93.0}, {"id": "101464", "name": "KQ2L06-M5N", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 80, "price": 111.0}, {"id": "101469", "name": "KQ2H04-00A", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 37, "price": 78.0}, {"id": "101470", "name": "KQ2H06-00A", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 24, "price": 78.0}, {"id": "101471", "name": "KQ2H04-06A", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 30, "price": 84.0}, {"id": "ITEM-212", "name": "KQ2H06-08A", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 36, "price": 90.0}, {"id": "ITEM-213", "name": "KQ2H08-08A", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 2, "price": 95.0}, {"id": "ITEM-214", "name": "KQ2H08-010A", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 48, "price": 100.0}, {"id": "ITEM-215", "name": "KQ2H10-12A", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 30, "price": 65.12}, {"id": "ITEM-216", "name": "KQ2U04-04T", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 49, "price": 74.0}, {"id": "101472", "name": "KQ2U04-04Y", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 16, "price": 108.0}, {"id": "ITEM-218", "name": "KQ2U06-06T", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 25, "price": 75.0}, {"id": "101465", "name": "KQ2U06-06Y", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 20, "price": 99.0}, {"id": "101473", "name": "KQ2U04-06Y", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 30, "price": 117.0}, {"id": "ITEM-221", "name": "KQ2U08-06Y", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 24, "price": 118.0}, {"id": "ITEM-222", "name": "KQ2U010-08Y", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 27, "price": 119.0}, {"id": "ITEM-223", "name": "KQ2U012-10Y", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 20, "price": 120.0}, {"id": "120170", "name": "MICRO COUPLER MC-04PH", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 26, "price": 84.0}, {"id": "120121", "name": "MICRO COUPLER MC-05SM", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 16, "price": 362.0}, {"id": "001312", "name": "MINI PRESSURE REGULATOR", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 5, "price": 1943.0}, {"id": "152308", "name": "MANUAL AIR VALVE PUSH BUTTON", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 6, "price": 1152.0}, {"id": "G6B-4BND-DC24V", "name": "G6B-4BND-DC24V", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 7, "price": 890.0}, {"id": "MSQB10L3", "name": "Rotaly MSQB10L3", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 4, "price": 10793.0}, {"id": "MSQB20L3", "name": "Rotaly MSQB-20-L3", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 3, "price": 11821.0}, {"id": "20-RBC1006", "name": "Shock Absorber, RB Series", "category": "Mini Manifold", "unit": "ชิ้น", "stock": 3, "price": 1318.4}];
+
+const initialDepts = ["ฝ่ายบุคคล","IT","บริหาร","สำนักงาน","การเงิน","ปฏิบัติการ","รักษาความปลอดภัย","อื่นๆ"];
+
+const initialUsers = [
+  { id:"U001", name:"สมชาย ใจดี",    dept:"ฝ่ายบุคคล", role:"Staff", tel:"081-234-5678" },
+  { id:"U002", name:"มานะ ทำงานดี",  dept:"IT",         role:"Staff", tel:"082-345-6789" },
+  { id:"U003", name:"สุดา รักงาน",   dept:"บริหาร",     role:"Admin", tel:"083-456-7890" },
+  { id:"U004", name:"วิชัย สุขใจ",   dept:"สำนักงาน",   role:"Staff", tel:"084-567-8901" },
+  { id:"U005", name:"พิมพ์ใจ งามดี", dept:"IT",         role:"Staff", tel:"085-678-9012" },
+];
+
+const mockHistory = [
+  { id:"TXN-001", date:"2025-05-28", type:"เบิก",    requester:"สมชาย ใจดี",    dept:"ฝ่ายบุคคล", purpose:"ใช้งานประจำ", total:750,  status:"บันทึกแล้ว",
+    items:[{name:"พาสพนักงานทั่วไป", qty:5, price:150, unit:"ใบ"}] },
+  { id:"TXN-002", date:"2025-05-27", type:"เบิก",    requester:"มานะ ทำงานดี",  dept:"IT",         purpose:"ทดแทนของชำรุด", total:1780, status:"บันทึกแล้ว",
+    items:[{name:"เมาส์ไร้สาย Logitech", qty:2, price:890, unit:"ชิ้น"}] },
+  { id:"TXN-003", date:"2025-05-27", type:"คืน",     requester:"สุดา รักงาน",   dept:"บริหาร",     purpose:"คืนหลังใช้งาน", total:120,  status:"คืนแล้ว",
+    items:[{name:"กุญแจห้องประชุม A", qty:1, price:120, unit:"ดอก"}] },
+  { id:"TXN-004", date:"2025-05-26", type:"เบิก",    requester:"วิชัย สุขใจ",   dept:"สำนักงาน",   purpose:"ใช้งานประจำ", total:1400, status:"บันทึกแล้ว",
+    items:[{name:"กระดาษ A4 (รีม)", qty:10, price:140, unit:"รีม"}] },
+  { id:"TXN-005", date:"2025-05-25", type:"เบิก",    requester:"พิมพ์ใจ งามดี", dept:"IT",         purpose:"ติดตั้งระบบ", total:870,  status:"บันทึกแล้ว",
+    items:[{name:"สาย HDMI 1.5m", qty:3, price:290, unit:"เส้น"}] },
+  { id:"TXN-006", date:"2025-05-24", type:"รับเข้า", requester:"ระบบ",           dept:"—",          purpose:"รับสินค้าใหม่", total:2400, status:"บันทึกแล้ว",
+    items:[{name:"ปากกาลูกลื่น (กล่อง)", qty:20, price:120, unit:"กล่อง"}] },
+];
+
+const emptyRow = { itemId:"", itemName:"", unit:"", stock:0, qty:"", price:"", note:"" };
+
+// ─── SEARCH DROPDOWN ───
+function SearchDropdown({ items, value, onChange, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(value?.name || "");
+  const ref = useRef(null);
+  const filtered = query.length > 0
+    ? items.filter(s => s.name.includes(query) || s.id.toLowerCase().includes(query.toLowerCase())).slice(0,8)
+    : items.slice(0,8);
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  useEffect(() => { if (value?.name) setQuery(value.name); }, [value]);
+  return (
+    <div ref={ref} style={{position:"relative",width:"100%"}}>
+      <input value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true); onChange(e.target.value); }}
+        onFocus={() => setOpen(true)}
+        placeholder="พิมพ์ชื่อหรือรหัส..."
+        style={{width:"100%",border:`1.5px solid ${value?.id?theme.secondary:theme.border}`,borderRadius:6,padding:"5px 8px",fontSize:12,background:value?.id?"#FFF0F5":"#fff",outline:"none",boxSizing:"border-box"}} />
+      {open && filtered.length > 0 && (
+        <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:`1.5px solid ${theme.border}`,borderRadius:8,zIndex:999,boxShadow:"0 8px 24px rgba(139,26,74,0.15)",maxHeight:240,overflowY:"auto"}}>
+          {filtered.map(item => (
+            <div key={item.id}
+              onMouseDown={() => { onSelect(item); setQuery(item.name); setOpen(false); }}
+              style={{padding:"8px 12px",cursor:"pointer",borderBottom:`1px solid ${theme.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,background:"#fff"}}
+              onMouseEnter={e => e.currentTarget.style.background=theme.light}
+              onMouseLeave={e => e.currentTarget.style.background="#fff"}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+                {item.image
+                  ? <img src={item.image} alt={item.name} style={{width:32,height:32,objectFit:"cover",borderRadius:6,flexShrink:0,border:`1px solid ${theme.border}`}}/>
+                  : <div style={{width:32,height:32,borderRadius:6,background:theme.light,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>📦</div>
+                }
+                <div>
+                  <div style={{fontSize:12,fontWeight:600,color:theme.primary}}>{item.name}</div>
+                  <div style={{fontSize:10,color:theme.muted}}>{item.id} · {item.category} · {item.price?.toLocaleString()} บ./หน่วย</div>
+                </div>
+              </div>
+              <div style={{fontSize:11,color:item.stock<=5?"#e53935":"#2e7d32",fontWeight:700,background:item.stock<=5?"#FFEBEE":"#E8F5E9",padding:"2px 8px",borderRadius:20,flexShrink:0}}>
+                {item.stock} {item.unit}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── DASHBOARD ───
+function DashboardPage({ stockItems }) {
+  const totalValue = stockItems.reduce((s,i) => s+i.stock*i.price, 0);
+  const lowStock = stockItems.filter(i => i.stock<=5);
+  const categories = [...new Set(stockItems.map(i => i.category))];
+  const catStats = categories.map(cat => { const its=stockItems.filter(i=>i.category===cat); return {cat,count:its.length,total:its.reduce((s,i)=>s+i.stock,0)}; });
+  const alerts = stockItems.filter(i=>i.stock<=8).sort((a,b)=>a.stock-b.stock).slice(0,5);
+  const topValue = [...stockItems].sort((a,b)=>b.stock*b.price-a.stock*a.price).slice(0,5);
+  return (
+    <div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+        {[{icon:"📦",label:"รายการทั้งหมด",value:stockItems.length,unit:"รายการ",color:theme.primary},{icon:"💰",label:"มูลค่า Stock รวม",value:totalValue.toLocaleString(),unit:"บาท",color:"#1565C0"},{icon:"⚠️",label:"ของใกล้หมด",value:lowStock.length,unit:"รายการ",color:"#E65100"},{icon:"🗂️",label:"หมวดหมู่",value:categories.length,unit:"หมวด",color:"#2E7D32"}].map((c,i) => (
+          <div key={i} style={{background:"#fff",borderRadius:14,padding:"14px 16px",border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(139,26,74,0.07)"}}>
+            <div style={{fontSize:22,marginBottom:4}}>{c.icon}</div>
+            <div style={{fontSize:20,fontWeight:800,color:c.color}}>{c.value}</div>
+            <div style={{fontSize:10,color:theme.muted}}>{c.unit}</div>
+            <div style={{fontSize:11,color:theme.text,marginTop:2,fontWeight:600}}>{c.label}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden",marginBottom:14}}>
+        <div style={{background:theme.gradient,padding:"10px 16px"}}><span style={{fontWeight:700,color:"#fff",fontSize:13}}>🗂️ สรุปแยกตามหมวดหมู่</span></div>
+        {catStats.map((c,i) => (
+          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",borderBottom:i<catStats.length-1?`1px solid ${theme.border}`:"none",background:i%2===0?"#fff":theme.light}}>
+            <div><span style={{fontWeight:600,fontSize:13}}>{c.cat}</span><span style={{fontSize:10,color:theme.muted,marginLeft:8}}>{c.count} รายการ</span></div>
+            <div><span style={{fontWeight:700,fontSize:13,color:theme.primary}}>{c.total.toLocaleString()}</span><span style={{fontSize:10,color:theme.muted,marginLeft:4}}>ชิ้น</span></div>
+          </div>
+        ))}
+      </div>
+      <div style={{background:"#fff",borderRadius:14,border:"1px solid #FFE082",overflow:"hidden",marginBottom:14}}>
+        <div style={{background:"linear-gradient(135deg,#E65100,#FF8F00)",padding:"10px 16px"}}><span style={{fontWeight:700,color:"#fff",fontSize:13}}>⚠️ แจ้งเตือน Stock ใกล้หมด</span></div>
+        {alerts.length===0 && <div style={{padding:16,color:theme.muted,fontSize:12,textAlign:"center"}}>ไม่มีรายการใกล้หมด ✅</div>}
+        {alerts.map((item,i) => (
+          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",borderBottom:i<alerts.length-1?"1px solid #FFF3E0":"none"}}>
+            <div><div style={{fontWeight:600,fontSize:12}}>{item.name}</div><div style={{fontSize:10,color:theme.muted}}>{item.id} · {item.category}</div></div>
+            <div style={{background:item.stock<=3?"#FFEBEE":"#FFF8E1",border:`1px solid ${item.stock<=3?"#FFCDD2":"#FFE082"}`,borderRadius:20,padding:"3px 12px",fontWeight:800,fontSize:12,color:item.stock<=3?"#c62828":"#E65100"}}>{item.stock} {item.unit}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden"}}>
+        <div style={{background:"linear-gradient(135deg,#1565C0,#1976D2)",padding:"10px 16px"}}><span style={{fontWeight:700,color:"#fff",fontSize:13}}>💎 มูลค่าสูงสุด Top 5</span></div>
+        {topValue.map((item,i) => (
+          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",borderBottom:i<4?`1px solid ${theme.border}`:"none",background:i%2===0?"#fff":"#F3F8FF"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:24,height:24,borderRadius:"50%",background:i===0?"#FFD700":i===1?"#C0C0C0":i===2?"#CD7F32":theme.border,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:11,color:i<3?"#fff":theme.muted}}>{i+1}</div>
+              <div><div style={{fontWeight:600,fontSize:12}}>{item.name}</div><div style={{fontSize:10,color:theme.muted}}>{item.stock} {item.unit} × {item.price.toLocaleString()} ฿</div></div>
+            </div>
+            <div style={{fontWeight:800,fontSize:13,color:"#1565C0"}}>{(item.stock*item.price).toLocaleString()} ฿</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── STOCK LIST ───
+function StockListPage({ stockItems, setStockItems, categories }) {
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState("ทั้งหมด");
+  const [delConfirm, setDelConfirm] = useState(null);
+  const [editItem, setEditItem] = useState(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [delAllConfirm, setDelAllConfirm] = useState(false);
+
+  const allCats = ["ทั้งหมด", ...new Set(stockItems.map(i => i.category))];
+  const filtered = stockItems.filter(i =>
+    (i.name.includes(search) || i.id.toLowerCase().includes(search.toLowerCase())) &&
+    (filterCat === "ทั้งหมด" || i.category === filterCat)
+  );
+
+  const emptyForm = {id:"",name:"",category:"",unit:"ชิ้น",stock:"",price:"",image:""};
+  const [form, setForm] = useState(emptyForm);
+  const [imgUploading, setImgUploading] = useState(false);
+  const [imgError, setImgError] = useState("");
+  const [formErr, setFormErr] = useState({});
+  const units2 = ["ชิ้น","อัน","ใบ","ชุด","กล่อง","แพ็ค","คู่","ดอก","เส้น","ม้วน","รีม"];
+
+  const openAdd = () => { setForm(emptyForm); setFormErr({}); setEditItem(null); setShowAddForm(true); };
+  const openEdit = item => { setForm({id:item.id,name:item.name,category:item.category,unit:item.unit,stock:item.stock,price:item.price,image:item.image||""}); setFormErr({}); setImgError(""); setEditItem(item.id); setShowAddForm(true); };
+  const closeForm = () => { setShowAddForm(false); setEditItem(null); setForm(emptyForm); setFormErr({}); setImgError(""); };
+
+  const validateForm = () => {
+    const e={};
+    if (!form.name.trim()) e.name="กรุณากรอกชื่อ";
+    if (!form.category) e.category="กรุณาเลือกหมวดหมู่";
+    if (form.stock==="" || isNaN(form.stock)) e.stock="กรุณากรอกจำนวน";
+    if (form.price==="" || isNaN(form.price)) e.price="กรุณากรอกราคา";
+    return e;
+  };
+
+  const handleSave = () => {
+    const e = validateForm();
+    if (Object.keys(e).length) { setFormErr(e); return; }
+    if (editItem) {
+      const updated = {...form, stock:Number(form.stock), price:Number(form.price)};
+      setStockItems(p => p.map(i => i.id===editItem ? {...i,...updated} : i));
+      if (window._db) window._db.collection('stockItems').doc(editItem).set({...form,stock:Number(form.stock),price:Number(form.price)}).catch(console.error);
+    } else {
+      const newId = form.id.trim() || ("ITEM-"+String(stockItems.length+1).padStart(3,"0"));
+      const newItem = {...form, id:newId, stock:Number(form.stock), price:Number(form.price)};
+      setStockItems(p => [...p, newItem]);
+      if (window._db) window._db.collection('stockItems').doc(newId).set(newItem).catch(console.error);
+    }
+    closeForm();
+  };
+
+  const handleDelete = id => { setStockItems(p=>p.filter(i=>i.id!==id)); setDelConfirm(null); };
+  const handleDeleteAll = () => { setStockItems([]); setDelAllConfirm(false); };
+
+  const inp2 = (err) => ({width:"100%",border:`1.5px solid ${err?"#e53935":theme.border}`,borderRadius:8,padding:"8px 12px",fontSize:12,background:"#fafafa",outline:"none",boxSizing:"border-box"});
+
+  return (
+    <div>
+      {/* Modal แก้ไข/เพิ่ม */}
+      {showAddForm && (
+        <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.4)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:420,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 16px 48px rgba(0,0,0,0.2)"}}>
+            <div style={{background:theme.gradient,padding:"14px 18px",borderRadius:"16px 16px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontWeight:700,color:"#fff",fontSize:15}}>{editItem?"✏️ แก้ไขรายการ":"➕ เพิ่มรายการใหม่"}</span>
+              <button onClick={closeForm} style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",borderRadius:8,width:28,height:28,cursor:"pointer",fontSize:14,fontWeight:700}}>✕</button>
+            </div>
+            <div style={{padding:16,display:"flex",flexDirection:"column",gap:12}}>
+              <div>
+                <label style={{fontSize:11,fontWeight:600,color:theme.primary,display:"block",marginBottom:4}}>ชื่อรายการ *</label>
+                <input value={form.name} onChange={e=>{setForm(p=>({...p,name:e.target.value}));setFormErr(p=>({...p,name:""}));}} placeholder="เช่น พาสพนักงาน" style={inp2(formErr.name)} />
+                {formErr.name && <div style={{fontSize:10,color:"#e53935",marginTop:3}}>⚠ {formErr.name}</div>}
+              </div>
+              <div>
+                <label style={{fontSize:11,fontWeight:600,color:theme.primary,display:"block",marginBottom:4}}>รหัส (ID)</label>
+                <input value={form.id} onChange={e=>setForm(p=>({...p,id:e.target.value}))} placeholder="เช่น PASS-001 (ไม่กรอก=อัตโนมัติ)" style={inp2(false)} disabled={!!editItem} />
+              </div>
+              <div>
+                <label style={{fontSize:11,fontWeight:600,color:theme.primary,display:"block",marginBottom:4}}>หมวดหมู่ *</label>
+                <select value={form.category} onChange={e=>{setForm(p=>({...p,category:e.target.value}));setFormErr(p=>({...p,category:""}));}} style={inp2(formErr.category)}>
+                  <option value="">-- เลือกหมวดหมู่ --</option>
+                  {categories.map(c=><option key={c}>{c}</option>)}
+                </select>
+                {formErr.category && <div style={{fontSize:10,color:"#e53935",marginTop:3}}>⚠ {formErr.category}</div>}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <label style={{fontSize:11,fontWeight:600,color:theme.primary,display:"block",marginBottom:4}}>จำนวน *</label>
+                  <input type="number" value={form.stock} onChange={e=>{setForm(p=>({...p,stock:e.target.value}));setFormErr(p=>({...p,stock:""}));}} placeholder="0" style={inp2(formErr.stock)} />
+                  {formErr.stock && <div style={{fontSize:10,color:"#e53935",marginTop:3}}>⚠ {formErr.stock}</div>}
+                </div>
+                <div>
+                  <label style={{fontSize:11,fontWeight:600,color:theme.primary,display:"block",marginBottom:4}}>หน่วย *</label>
+                  <select value={form.unit} onChange={e=>setForm(p=>({...p,unit:e.target.value}))} style={inp2(false)}>
+                    {units2.map(u=><option key={u}>{u}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{fontSize:11,fontWeight:600,color:theme.primary,display:"block",marginBottom:4}}>ราคาต่อหน่วย (บาท) *</label>
+                <input type="number" value={form.price} onChange={e=>{setForm(p=>({...p,price:e.target.value}));setFormErr(p=>({...p,price:""}));}} placeholder="0.00" style={inp2(formErr.price)} />
+                {formErr.price && <div style={{fontSize:10,color:"#e53935",marginTop:3}}>⚠ {formErr.price}</div>}
+              </div>
+              {/* รูปภาพ */}
+              <div>
+                <label style={{fontSize:11,fontWeight:600,color:theme.primary,display:"block",marginBottom:4}}>รูปภาพอุปกรณ์</label>
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  {form.image && <img src={form.image} alt="preview" style={{width:64,height:64,objectFit:"cover",borderRadius:8,border:`1px solid ${theme.border}`}}/>}
+                  <label style={{flex:1,border:`2px dashed ${theme.border}`,borderRadius:8,padding:"10px",textAlign:"center",cursor:"pointer",background:"#fafafa",fontSize:12,color:theme.muted}}>
+                    {imgUploading ? "⏳ กำลังอัปโหลด..." : "📷 เลือกรูปภาพ"}
+                    <input type="file" accept="image/*" style={{display:"none"}} onChange={async e => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      setImgUploading(true); setImgError("");
+                      try {
+                        const url = await uploadToCloudinary(file);
+                        setForm(p=>({...p,image:url}));
+                      } catch(err) { setImgError("❌ อัปโหลดไม่สำเร็จ: "+err.message); }
+                      finally { setImgUploading(false); }
+                    }}/>
+                  </label>
+                  {form.image && <button onClick={()=>setForm(p=>({...p,image:""}))} style={{background:"#FFEBEE",color:"#e53935",border:"none",borderRadius:7,padding:"6px 10px",fontSize:11,cursor:"pointer"}}>✕ ลบรูป</button>}
+                </div>
+                {imgError && <div style={{fontSize:10,color:"#e53935",marginTop:3}}>{imgError}</div>}
+              </div>
+
+              <div style={{display:"flex",gap:8,marginTop:4}}>
+                <button onClick={handleSave} style={{flex:2,background:theme.gradient,color:"#fff",border:"none",borderRadius:10,padding:"12px",fontWeight:700,fontSize:14,cursor:"pointer"}}>
+                  {editItem?"💾 บันทึกการแก้ไข":"✅ เพิ่มรายการ"}
+                </button>
+                <button onClick={closeForm} style={{flex:1,background:"#f5f5f5",color:theme.muted,border:"none",borderRadius:10,padding:"12px",fontWeight:600,fontSize:13,cursor:"pointer"}}>ยกเลิก</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Search & Filter */}
+      <div style={{background:"#fff",borderRadius:12,padding:14,marginBottom:12,border:`1px solid ${theme.border}`}}>
+        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 ค้นหาชื่อหรือรหัส..."
+          style={{width:"100%",border:`1.5px solid ${theme.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,outline:"none",marginBottom:10,boxSizing:"border-box"}} />
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {allCats.map(cat=>(
+            <button key={cat} onClick={()=>setFilterCat(cat)}
+              style={{padding:"5px 12px",borderRadius:20,border:`1.5px solid ${filterCat===cat?theme.primary:theme.border}`,background:filterCat===cat?theme.gradient:"#fff",color:filterCat===cat?"#fff":theme.muted,fontSize:11,fontWeight:filterCat===cat?700:400,cursor:"pointer"}}>
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={{fontSize:11,color:theme.muted}}>แสดง {filtered.length} จาก {stockItems.length} รายการ</div>
+        <div style={{display:"flex",gap:6}}>
+          {delAllConfirm
+            ? <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <span style={{fontSize:11,color:"#e53935"}}>ลบทั้งหมด?</span>
+                <button onClick={handleDeleteAll} style={{background:"#e53935",color:"#fff",border:"none",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>ยืนยัน</button>
+                <button onClick={()=>setDelAllConfirm(false)} style={{background:"#f5f5f5",color:theme.muted,border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,cursor:"pointer"}}>ยกเลิก</button>
+              </div>
+            : <>
+                {stockItems.length>0 && <button onClick={()=>setDelAllConfirm(true)} style={{background:"#FFEBEE",color:"#e53935",border:"1px solid #FFCDD2",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer"}}>🗑️ ลบทั้งหมด</button>}
+                <button onClick={openAdd} style={{background:theme.gradient,color:"#fff",border:"none",borderRadius:8,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(139,26,74,0.25)"}}>➕ เพิ่มรายการ</button>
+              </>
+          }
+        </div>
+      </div>
+
+      {/* ไม่มีรายการ */}
+      {filtered.length===0 && (
+        <div style={{textAlign:"center",padding:48,background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,color:theme.muted}}>
+          <div style={{fontSize:32,marginBottom:8}}>📭</div>
+          <div style={{fontSize:13,marginBottom:12}}>ยังไม่มีรายการ Stock</div>
+          <button onClick={openAdd} style={{background:theme.gradient,color:"#fff",border:"none",borderRadius:10,padding:"10px 24px",fontWeight:700,fontSize:13,cursor:"pointer"}}>➕ เพิ่มรายการแรก</button>
+        </div>
+      )}
+
+      {/* รายการ */}
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {filtered.map(item=>(
+          <div key={item.id} style={{background:"#fff",borderRadius:12,border:`1px solid ${item.stock<=5?"#FFCDD2":theme.border}`,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+            {item.image && <img src={item.image} alt={item.name} style={{width:48,height:48,objectFit:"cover",borderRadius:8,flexShrink:0,border:`1px solid ${theme.border}`}}/>}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:13,marginBottom:2}}>{item.name}</div>
+              <div style={{fontSize:10,color:theme.muted}}>{item.id} · {item.category}</div>
+              <div style={{fontSize:11,color:theme.muted,marginTop:3}}>{item.price.toLocaleString()} บาท / {item.unit}</div>
+            </div>
+            <div style={{textAlign:"right",marginRight:8}}>
+              <div style={{fontSize:18,fontWeight:800,color:item.stock<=5?"#c62828":item.stock<=10?"#E65100":theme.primary}}>{item.stock}</div>
+              <div style={{fontSize:10,color:theme.muted}}>{item.unit}</div>
+              <div style={{marginTop:4,fontSize:9,fontWeight:700,padding:"2px 8px",borderRadius:20,background:item.stock<=5?"#FFEBEE":item.stock<=10?"#FFF3E0":"#E8F5E9",color:item.stock<=5?"#c62828":item.stock<=10?"#E65100":"#2e7d32"}}>
+                {item.stock<=5?"⚠️ ใกล้หมด":item.stock<=10?"🟡 ปานกลาง":"✅ ปกติ"}
+              </div>
+            </div>
+            {/* ปุ่ม edit/delete */}
+            <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
+              <button onClick={()=>openEdit(item)} style={{background:"#E3F2FD",color:"#1565C0",border:"1px solid #BBDEFB",borderRadius:7,padding:"5px 10px",fontSize:11,cursor:"pointer",fontWeight:600}}>✏️</button>
+              {delConfirm===item.id
+                ? <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                    <button onClick={()=>handleDelete(item.id)} style={{background:"#e53935",color:"#fff",border:"none",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}}>ลบ</button>
+                    <button onClick={()=>setDelConfirm(null)} style={{background:"#f5f5f5",color:theme.muted,border:"none",borderRadius:6,padding:"3px 8px",fontSize:10,cursor:"pointer"}}>ยกเลิก</button>
+                  </div>
+                : <button onClick={()=>setDelConfirm(item.id)} style={{background:"#FFEBEE",color:"#e53935",border:"1px solid #FFCDD2",borderRadius:7,padding:"5px 10px",fontSize:11,cursor:"pointer"}}>🗑️</button>
+              }
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── ADD STOCK ───
+const initialCategories = ["Air Nipper", "Gripper", "Jungle Gym Parts", "Mini Manifold", "Section Pad", "Section Stem", "Tool Change"];
+const units = ["ชิ้น","อัน","ใบ","ชุด","กล่อง","แพ็ค","คู่","ดอก","เส้น","ม้วน","รีม"];
+
+function AddStockPage({ categories, setCategories, onAddItem }) {
+  const [saved, setSaved] = useState(false);
+  const [imgUploading, setImgUploading] = useState(false);
+  const [imgError, setImgError] = useState("");
+  const [form, setForm] = useState({name:"",category:"",sku:"",brand:"",qty:"",unit:"ชิ้น",price:"",minStock:"",date:"",po:"",location:"",note:"",image:""});
+  const [errors, setErrors] = useState({});
+  // จัดการหมวดหมู่
+  const [newCat, setNewCat] = useState("");
+  const [delCatConfirm, setDelCatConfirm] = useState(null);
+  const [showCatManager, setShowCatManager] = useState(false);
+
+  const addCategory = () => {
+    const t = newCat.trim();
+    if (!t) return;
+    if (categories.includes(t)) { alert("มีหมวดหมู่นี้แล้ว"); return; }
+    setCategories(p=>[...p, t]);
+    setNewCat("");
+  };
+  const deleteCategory = cat => {
+    setCategories(p=>p.filter(c=>c!==cat));
+    setDelCatConfirm(null);
+    if (form.category===cat) setForm(p=>({...p,category:""}));
+  };
+
+  const validate = () => {
+    const e={};
+    if (!form.name.trim()) e.name="กรุณากรอกชื่อรายการ";
+    if (!form.category) e.category="กรุณาเลือกหมวดหมู่";
+    if (!form.qty) e.qty="กรุณากรอกจำนวน";
+    if (!form.price) e.price="กรุณากรอกราคา";
+    return e;
+  };
+
+  const handleSave = () => {
+    const e=validate();
+    if (Object.keys(e).length){setErrors(e);return;}
+    const newItem = {
+      id: form.sku.trim() || ("ITEM-" + Date.now()),
+      name: form.name.trim(),
+      category: form.category,
+      unit: form.unit,
+      stock: Number(form.qty) || 0,
+      price: Number(form.price) || 0,
+      image: form.image || "",
+    };
+    if (onAddItem) onAddItem(newItem);
+    setSaved(true);
+    setForm({name:"",category:"",sku:"",brand:"",qty:"",unit:"ชิ้น",price:"",minStock:"",date:"",po:"",location:"",note:"",image:""});
+    setErrors({});
+    setImgError("");
+    setTimeout(()=>setSaved(false),2000);
+  };
+
+  const inp = (style={}) => ({width:"100%",border:`1.5px solid ${theme.border}`,borderRadius:8,padding:"8px 12px",fontSize:12,background:"#fafafa",outline:"none",boxSizing:"border-box",...style});
+  const errBorder = field => errors[field]?{border:"1.5px solid #e53935"}:{};
+
+  return (
+    <div>
+      {/* ─ ข้อมูลพื้นฐาน ─ */}
+      <div style={{marginBottom:16}}>
+        <div style={{background:theme.gradient,color:"#fff",padding:"9px 14px",borderRadius:"10px 10px 0 0",fontWeight:700,fontSize:14,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <span>📋 ข้อมูลพื้นฐาน</span>
+        </div>
+        <div style={{border:`1px solid ${theme.border}`,borderTop:"none",borderRadius:"0 0 10px 10px",overflow:"hidden"}}>
+          {/* ชื่อ */}
+          <div style={{padding:"11px 14px",background:"#fff"}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5}}>ชื่อรายการ / อุปกรณ์ *</div>
+            <input value={form.name} onChange={e=>{setForm(p=>({...p,name:e.target.value}));setErrors(p=>({...p,name:""}));}} placeholder="เช่น พาสพนักงาน, กุญแจสำรอง" style={{...inp(),...errBorder("name")}} />
+            {errors.name&&<div style={{fontSize:10,color:"#e53935",marginTop:3}}>⚠ {errors.name}</div>}
+          </div>
+
+          {/* หมวดหมู่ */}
+          <div style={{padding:"11px 14px",background:theme.light}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>หมวดหมู่ *</span>
+              <button onClick={()=>setShowCatManager(p=>!p)}
+                style={{fontSize:10,background:showCatManager?theme.primary:"#fff",color:showCatManager?"#fff":theme.primary,border:`1px solid ${theme.primary}`,borderRadius:6,padding:"2px 10px",cursor:"pointer",fontWeight:600}}>
+                {showCatManager?"✕ ปิด":"⚙️ จัดการหมวดหมู่"}
+              </button>
+            </div>
+            <select value={form.category} onChange={e=>{setForm(p=>({...p,category:e.target.value}));setErrors(p=>({...p,category:""}));}}
+              style={{...inp(),...errBorder("category")}}>
+              <option value="">-- เลือกหมวดหมู่ --</option>
+              {categories.map(c=><option key={c}>{c}</option>)}
+            </select>
+            {errors.category&&<div style={{fontSize:10,color:"#e53935",marginTop:3}}>⚠ {errors.category}</div>}
+
+            {/* จัดการหมวดหมู่ */}
+            {showCatManager && (
+              <div style={{marginTop:10,background:"#fff",borderRadius:10,border:`1px solid ${theme.border}`,overflow:"hidden"}}>
+                <div style={{background:"#F8E8EF",padding:"8px 12px",fontWeight:700,fontSize:12,color:theme.primary}}>⚙️ จัดการหมวดหมู่</div>
+                {/* เพิ่มใหม่ */}
+                <div style={{padding:"10px 12px",borderBottom:`1px solid ${theme.border}`,display:"flex",gap:6}}>
+                  <input value={newCat} onChange={e=>setNewCat(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&addCategory()}
+                    placeholder="ชื่อหมวดหมู่ใหม่..."
+                    style={{flex:1,border:`1.5px solid ${theme.border}`,borderRadius:7,padding:"6px 10px",fontSize:12,outline:"none"}} />
+                  <button onClick={addCategory}
+                    style={{background:theme.gradient,color:"#fff",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>+ เพิ่ม</button>
+                </div>
+                {/* รายการหมวดหมู่ */}
+                {categories.map(cat=>(
+                  <div key={cat} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 12px",borderBottom:`1px solid ${theme.border}`,background:"#fff"}}>
+                    <span style={{fontSize:12,color:theme.text}}>📂 {cat}</span>
+                    {delCatConfirm===cat
+                      ? <div style={{display:"flex",gap:4}}>
+                          <button onClick={()=>deleteCategory(cat)} style={{background:"#e53935",color:"#fff",border:"none",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>ลบ</button>
+                          <button onClick={()=>setDelCatConfirm(null)} style={{background:"#f5f5f5",color:theme.muted,border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer"}}>ยกเลิก</button>
+                        </div>
+                      : <button onClick={()=>setDelCatConfirm(cat)} style={{background:"#FFEBEE",color:"#e53935",border:"1px solid #FFCDD2",borderRadius:6,padding:"3px 10px",fontSize:11,cursor:"pointer"}}>🗑️ ลบ</button>
+                    }
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* SKU */}
+          <div style={{padding:"11px 14px",background:"#fff"}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5}}>รหัสรายการ (SKU)</div>
+            <input value={form.sku} onChange={e=>setForm(p=>({...p,sku:e.target.value}))} placeholder="เช่น PASS-001, EQ-045" style={inp()} />
+          </div>
+          {/* ยี่ห้อ */}
+          <div style={{padding:"11px 14px",background:theme.light}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5}}>ยี่ห้อ / รุ่น</div>
+            <input value={form.brand} onChange={e=>setForm(p=>({...p,brand:e.target.value}))} placeholder="ระบุยี่ห้อหรือรุ่น (ถ้ามี)" style={inp()} />
+          </div>
+        </div>
+      </div>
+
+      {/* ─ จำนวน ราคา หน่วย ─ */}
+      <div style={{marginBottom:16}}>
+        <div style={{background:theme.gradient,color:"#fff",padding:"9px 14px",borderRadius:"10px 10px 0 0",fontWeight:700,fontSize:14}}>🔢 จำนวน, ราคา & หน่วย</div>
+        <div style={{border:`1px solid ${theme.border}`,borderTop:"none",borderRadius:"0 0 10px 10px",overflow:"hidden"}}>
+          <div style={{padding:"11px 14px",background:"#fff"}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5}}>จำนวนที่รับเข้า *</div>
+            <input type="number" value={form.qty} onChange={e=>{setForm(p=>({...p,qty:e.target.value}));setErrors(p=>({...p,qty:""}));}} placeholder="0" style={{...inp(),...errBorder("qty")}} />
+            {errors.qty&&<div style={{fontSize:10,color:"#e53935",marginTop:3}}>⚠ {errors.qty}</div>}
+          </div>
+          <div style={{padding:"11px 14px",background:theme.light}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5}}>หน่วย *</div>
+            <select value={form.unit} onChange={e=>setForm(p=>({...p,unit:e.target.value}))} style={inp()}>
+              {units.map(u=><option key={u}>{u}</option>)}
+            </select>
+          </div>
+          <div style={{padding:"11px 14px",background:"#fff"}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5}}>ราคาต่อหน่วย (บาท) *</div>
+            <input type="number" value={form.price} onChange={e=>{setForm(p=>({...p,price:e.target.value}));setErrors(p=>({...p,price:""}));}} placeholder="0.00" style={{...inp(),...errBorder("price")}} />
+            {errors.price&&<div style={{fontSize:10,color:"#e53935",marginTop:3}}>⚠ {errors.price}</div>}
+          </div>
+          <div style={{padding:"11px 14px",background:theme.light}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5}}>จำนวน Stock ขั้นต่ำ (แจ้งเตือน)</div>
+            <input type="number" value={form.minStock} onChange={e=>setForm(p=>({...p,minStock:e.target.value}))} placeholder="เช่น 5" style={inp()} />
+          </div>
+        </div>
+      </div>
+
+      {/* ─ รายละเอียดเพิ่มเติม ─ */}
+      <div style={{marginBottom:16}}>
+        <div style={{background:theme.gradient,color:"#fff",padding:"9px 14px",borderRadius:"10px 10px 0 0",fontWeight:700,fontSize:14}}>📝 รายละเอียดเพิ่มเติม</div>
+        <div style={{border:`1px solid ${theme.border}`,borderTop:"none",borderRadius:"0 0 10px 10px",overflow:"hidden"}}>
+          <div style={{padding:"11px 14px",background:"#fff"}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5}}>วันที่รับเข้า *</div>
+            <input type="date" value={form.date} onChange={e=>setForm(p=>({...p,date:e.target.value}))} style={inp()} />
+          </div>
+          <div style={{padding:"11px 14px",background:theme.light}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5}}>อ้างอิง PO / เอกสาร</div>
+            <input value={form.po} onChange={e=>setForm(p=>({...p,po:e.target.value}))} placeholder="เลขที่ใบสั่งซื้อ (ถ้ามี)" style={inp()} />
+          </div>
+          <div style={{padding:"11px 14px",background:"#fff"}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5}}>สถานที่จัดเก็บ</div>
+            <input value={form.location} onChange={e=>setForm(p=>({...p,location:e.target.value}))} placeholder="เช่น ตู้ A ชั้น 2, ห้องสต๊อก" style={inp()} />
+          </div>
+          <div style={{padding:"11px 14px",background:theme.light}}>
+            <div style={{fontSize:11,fontWeight:600,color:theme.primary,marginBottom:5}}>หมายเหตุ</div>
+            <textarea value={form.note} onChange={e=>setForm(p=>({...p,note:e.target.value}))} placeholder="ข้อมูลเพิ่มเติม..." style={{...inp(),minHeight:60,resize:"vertical"}} />
+          </div>
+        </div>
+      </div>
+
+      {/* รูปภาพ section */}
+      <div style={{marginBottom:16}}>
+        <div style={{background:theme.gradient,color:"#fff",padding:"9px 14px",borderRadius:"10px 10px 0 0",fontWeight:700,fontSize:14}}>📷 รูปภาพอุปกรณ์</div>
+        <div style={{border:`1px solid ${theme.border}`,borderTop:"none",borderRadius:"0 0 10px 10px",padding:14,background:"#fff"}}>
+          <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+            {form.image && <img src={form.image} alt="preview" style={{width:80,height:80,objectFit:"cover",borderRadius:10,border:`1px solid ${theme.border}`}}/>}
+            <label style={{flex:1,minWidth:120,border:`2px dashed ${theme.border}`,borderRadius:10,padding:"14px",textAlign:"center",cursor:"pointer",background:"#fafafa"}}>
+              <div style={{fontSize:24,marginBottom:4}}>📷</div>
+              <div style={{fontSize:12,color:theme.muted,fontWeight:600}}>{imgUploading?"⏳ กำลังอัปโหลด...":"คลิกเพื่อเลือกรูป"}</div>
+              <div style={{fontSize:10,color:"#bbb",marginTop:2}}>JPG, PNG ขนาดไม่เกิน 5MB</div>
+              <input type="file" accept="image/*" style={{display:"none"}} onChange={async e=>{
+                const file=e.target.files[0]; if(!file) return;
+                setImgUploading(true); setImgError("");
+                try { const url=await uploadToCloudinary(file); setForm(p=>({...p,image:url})); }
+                catch(err) { setImgError("❌ "+err.message); }
+                finally { setImgUploading(false); }
+              }}/>
+            </label>
+            {form.image && <button onClick={()=>setForm(p=>({...p,image:""}))} style={{background:"#FFEBEE",color:"#e53935",border:"1px solid #FFCDD2",borderRadius:8,padding:"8px 12px",fontSize:12,cursor:"pointer"}}>🗑️ ลบรูป</button>}
+          </div>
+          {imgError && <div style={{fontSize:11,color:"#e53935",marginTop:6}}>{imgError}</div>}
+        </div>
+      </div>
+
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={handleSave} style={{flex:2,background:theme.gradient,color:"#fff",border:"none",borderRadius:10,padding:"13px",fontWeight:700,fontSize:14,cursor:"pointer",boxShadow:"0 4px 14px rgba(139,26,74,0.3)"}}>
+          {saved?"✅ บันทึกสำเร็จ!":"✅ บันทึกรายการ"}
+        </button>
+        <button onClick={()=>{setForm({name:"",category:"",sku:"",brand:"",qty:"",unit:"ชิ้น",price:"",minStock:"",date:"",po:"",location:"",note:"",image:""});setErrors({});}} style={{flex:1,background:"#fff",color:theme.muted,border:`1.5px solid ${theme.border}`,borderRadius:10,padding:"13px",fontWeight:600,fontSize:13,cursor:"pointer"}}>❌ ยกเลิก</button>
+      </div>
+      <div style={{background:"#FFF8E1",border:"1px solid #FFE082",borderRadius:10,padding:"9px 14px",marginTop:12,fontSize:11,color:"#7B6000"}}>⚠️ <strong>หมายเหตุ:</strong> ช่องที่มี * คือข้อมูลบังคับกรอก</div>
+    </div>
+  );
+}
+
+// ─── WITHDRAW ───
+function WithdrawPage({ stockItems, users, onSave, goToHistory }) {
+  const today = new Date().toISOString().split("T")[0];
+  const [rows, setRows] = useState(Array.from({length:20},()=>({...emptyRow})));
+  const [header, setHeader] = useState({date:today,requesterId:"",requester:"",dept:"",purpose:""});
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [userDropOpen, setUserDropOpen] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
+  const userRef = useRef(null);
+
+  useEffect(() => {
+    const h = e => { if (userRef.current && !userRef.current.contains(e.target)) setUserDropOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const filteredUsers = userSearch.length>0 ? users.filter(u=>u.name.includes(userSearch)||u.dept.includes(userSearch)) : users;
+  const selectUser = u => { setHeader(h=>({...h,requesterId:u.id,requester:u.name,dept:u.dept})); setUserSearch(u.name); setUserDropOpen(false); };
+  const updateRow = (i,field,val) => setRows(prev=>prev.map((r,idx)=>idx===i?{...r,[field]:val}:r));
+  const selectItem = (i,item) => setRows(prev=>prev.map((r,idx)=>idx===i?{...r,itemId:item.id,itemName:item.name,unit:item.unit,stock:item.stock,price:item.price,qty:""}:r));
+  const clearRow = i => setRows(prev=>prev.map((r,idx)=>idx===i?{...emptyRow}:r));
+  const filledRows = rows.filter(r=>r.itemId);
+  const grandTotal = filledRows.reduce((s,r)=>s+((parseFloat(r.price)||0)*(parseFloat(r.qty)||0)),0);
+
+  return (
+    <div>
+      <div style={{background:"#fff",borderRadius:12,padding:14,marginBottom:12,border:`1px solid ${theme.border}`}}>
+        <div style={{fontWeight:700,color:theme.primary,marginBottom:10,fontSize:13}}>📋 ข้อมูลการเบิก</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            <label style={{fontSize:10,fontWeight:600,color:theme.primary}}>วันที่เบิก *</label>
+            <input type="date" value={header.date} onChange={e=>setHeader(h=>({...h,date:e.target.value}))}
+              style={{border:`1.5px solid ${theme.border}`,borderRadius:7,padding:"6px 9px",fontSize:12,outline:"none",background:"#fafafa"}} />
+          </div>
+          <div style={{gridColumn:"1 / -1",display:"flex",flexDirection:"column",gap:3}} ref={userRef}>
+            <label style={{fontSize:10,fontWeight:600,color:theme.primary}}>ชื่อผู้เบิก * <span style={{color:theme.muted,fontWeight:400}}>(เลือกจากรายชื่อ)</span></label>
+            <div style={{position:"relative"}}>
+              <input value={userSearch}
+                onChange={e=>{setUserSearch(e.target.value);setUserDropOpen(true);setHeader(h=>({...h,requesterId:"",requester:"",dept:""}));}}
+                onFocus={()=>setUserDropOpen(true)} placeholder="พิมพ์ชื่อหรือแผนก..."
+                style={{width:"100%",border:`1.5px solid ${header.requesterId?theme.secondary:theme.border}`,borderRadius:8,padding:"8px 12px",fontSize:12,outline:"none",background:header.requesterId?"#FFF0F5":"#fafafa",boxSizing:"border-box"}} />
+              {header.requesterId && <div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",fontSize:16}}>✅</div>}
+              {userDropOpen && filteredUsers.length>0 && (
+                <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:`1.5px solid ${theme.border}`,borderRadius:10,zIndex:999,boxShadow:"0 8px 24px rgba(139,26,74,0.15)",maxHeight:200,overflowY:"auto"}}>
+                  {filteredUsers.map(u => (
+                    <div key={u.id} onMouseDown={()=>selectUser(u)}
+                      style={{padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${theme.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}
+                      onMouseEnter={e=>e.currentTarget.style.background=theme.light}
+                      onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{width:32,height:32,borderRadius:"50%",background:theme.gradient,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:13,flexShrink:0}}>{u.name.charAt(0)}</div>
+                        <div><div style={{fontSize:13,fontWeight:600}}>{u.name}</div><div style={{fontSize:10,color:theme.muted}}>{u.dept} · {u.id}</div></div>
+                      </div>
+                      <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:u.role==="Admin"?theme.light:"#E8F5E9",color:u.role==="Admin"?theme.primary:"#2E7D32"}}>{u.role}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {header.requesterId && <div style={{fontSize:11,color:theme.muted,background:theme.light,borderRadius:6,padding:"4px 10px"}}>📍 แผนก: <strong style={{color:theme.primary}}>{header.dept}</strong> · รหัส: {header.requesterId}</div>}
+          </div>
+          <div style={{gridColumn:"1 / -1",display:"flex",flexDirection:"column",gap:3}}>
+            <label style={{fontSize:10,fontWeight:600,color:theme.primary}}>วัตถุประสงค์ *</label>
+            <input type="text" value={header.purpose} placeholder="เช่น ใช้งานประจำ" onChange={e=>setHeader(h=>({...h,purpose:e.target.value}))}
+              style={{border:`1.5px solid ${theme.border}`,borderRadius:7,padding:"6px 9px",fontSize:12,outline:"none",background:"#fafafa"}} />
+          </div>
+
+        </div>
+      </div>
+      <div style={{background:"#fff",borderRadius:12,border:`1px solid ${theme.border}`,overflow:"hidden",marginBottom:12}}>
+        <div style={{background:theme.gradient,padding:"9px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontWeight:700,color:"#fff",fontSize:13}}>📦 รายการเบิก (20 บรรทัด)</span>
+          <span style={{fontSize:11,color:"rgba(255,255,255,0.85)",background:"rgba(255,255,255,0.15)",padding:"2px 10px",borderRadius:20}}>กรอกแล้ว {filledRows.length} / 20</span>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:600}}>
+            <thead>
+              <tr style={{background:theme.light}}>
+                {["#","รายการ / อุปกรณ์","หน่วย","คงเหลือ","จำนวน","ราคา/หน่วย","รวม(บาท)","หมายเหตุ",""].map((h,i)=>(
+                  <th key={i} style={{padding:"6px 8px",fontSize:9,fontWeight:700,color:theme.primary,textAlign:i>=3&&i<=6?"center":"left",borderBottom:`1.5px solid ${theme.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row,i) => (
+                <tr key={i} style={{background:row.itemId?"#FFFBFD":i%2===0?"#fff":"#FAFAFA",borderBottom:`1px solid ${theme.border}`}}>
+                  <td style={{padding:"5px 8px",fontSize:11,fontWeight:700,color:row.itemId?theme.secondary:theme.border,textAlign:"center",width:28}}>{i+1}</td>
+                  <td style={{padding:"5px 8px",minWidth:140}}><SearchDropdown items={stockItems} value={{id:row.itemId,name:row.itemName}} onChange={q=>updateRow(i,"itemName",q)} onSelect={item=>selectItem(i,item)} /></td>
+                  <td style={{padding:"5px 8px",textAlign:"center",fontSize:10,color:row.unit?theme.text:theme.border,width:48}}>{row.unit||"—"}</td>
+                  <td style={{padding:"5px 8px",textAlign:"center",width:52}}>
+                    {row.stock>0?<span style={{fontSize:10,fontWeight:700,color:row.stock<=5?"#c62828":"#2e7d32",background:row.stock<=5?"#FFEBEE":"#E8F5E9",padding:"1px 6px",borderRadius:20}}>{row.stock}</span>:<span style={{color:theme.border,fontSize:10}}>—</span>}
+                  </td>
+                  <td style={{padding:"5px 8px",textAlign:"center",width:52}}>
+                    <input type="number" min="1" max={row.stock} value={row.qty} disabled={!row.itemId} onChange={e=>updateRow(i,"qty",e.target.value)} placeholder="0"
+                      style={{width:42,border:`1.5px solid ${theme.border}`,borderRadius:5,padding:"3px",fontSize:11,textAlign:"center",background:!row.itemId?"#f5f5f5":"#fff",outline:"none"}} />
+                  </td>
+                  <td style={{padding:"5px 8px",textAlign:"center",width:68}}>
+                    <input type="number" min="0" value={row.price} disabled={!row.itemId} onChange={e=>updateRow(i,"price",e.target.value)} placeholder="0.00"
+                      style={{width:58,border:`1.5px solid ${theme.border}`,borderRadius:5,padding:"3px",fontSize:11,textAlign:"center",background:!row.itemId?"#f5f5f5":"#FFF8FD",outline:"none"}} />
+                  </td>
+                  <td style={{padding:"5px 8px",textAlign:"center",width:72}}>
+                    {row.itemId&&row.qty&&row.price?<span style={{fontSize:11,fontWeight:700,color:theme.primary}}>{(parseFloat(row.price)*parseFloat(row.qty)).toLocaleString()}</span>:<span style={{fontSize:10,color:theme.border}}>—</span>}
+                  </td>
+                  <td style={{padding:"5px 8px",width:80}}>
+                    <input type="text" value={row.note} disabled={!row.itemId} onChange={e=>updateRow(i,"note",e.target.value)} placeholder="หมายเหตุ..."
+                      style={{width:"100%",border:`1.5px solid ${theme.border}`,borderRadius:5,padding:"3px 6px",fontSize:10,background:!row.itemId?"#f5f5f5":"#fff",outline:"none",boxSizing:"border-box"}} />
+                  </td>
+                  <td style={{padding:"5px 8px",textAlign:"center",width:24}}>
+                    <span onClick={()=>row.itemId&&clearRow(i)} style={{cursor:row.itemId?"pointer":"default",color:row.itemId?"#e53935":theme.border,fontSize:12}}>{row.itemId?"✕":""}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {filledRows.length>0 && (
+        <div style={{background:theme.light,border:`1px solid ${theme.border}`,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
+          <div style={{fontWeight:700,color:theme.primary,marginBottom:8,fontSize:13}}>📊 สรุปรายการเบิก</div>
+          {filledRows.map((r,i) => {
+            const total=(parseFloat(r.price)||0)*(parseFloat(r.qty)||0);
+            return (
+              <div key={i} style={{display:"grid",gridTemplateColumns:"2fr 70px 75px 85px",gap:2,fontSize:11,padding:"4px 0",borderBottom:`1px solid ${theme.border}`,alignItems:"center"}}>
+                <span>{r.itemName}</span>
+                <span style={{textAlign:"right",color:theme.muted}}>{r.qty||"?"} {r.unit}</span>
+                <span style={{textAlign:"right",color:theme.muted}}>{r.price?`${parseFloat(r.price).toLocaleString()} ฿`:"—"}</span>
+                <span style={{textAlign:"right",fontWeight:700,color:theme.primary}}>{total>0?`${total.toLocaleString()} ฿`:"—"}</span>
+              </div>
+            );
+          })}
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:8,paddingTop:7,borderTop:`2px solid ${theme.secondary}`}}>
+            <span style={{fontWeight:700,fontSize:13,color:theme.primary}}>รวมทั้งหมด</span>
+            <span style={{fontWeight:800,fontSize:15,color:theme.primary}}>{grandTotal.toLocaleString()} บาท</span>
+          </div>
+        </div>
+      )}
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={()=>{
+          setSaveError("");
+          if (!header.requester) { setSaveError("⚠️ กรุณาเลือกชื่อผู้เบิก"); return; }
+          if (!header.purpose) { setSaveError("⚠️ กรุณากรอกวัตถุประสงค์"); return; }
+          if (filledRows.length === 0) { setSaveError("⚠️ กรุณาเลือกรายการที่ต้องการเบิก"); return; }
+          const txn = {
+            id: "TXN-" + Date.now(),
+            date: header.date,
+            type: "เบิก",
+            requester: header.requester,
+            dept: header.dept,
+            purpose: header.purpose,
+            items: filledRows.map(r=>({id:r.itemId,name:r.itemName,qty:parseFloat(r.qty)||0,price:parseFloat(r.price)||0,unit:r.unit,note:r.note})),
+            total: grandTotal,
+            status: "บันทึกแล้ว"
+          };
+          // คำนวณ stock ที่เหลือ
+          const updatedItems = stockItems.map(item => {
+            const found = txn.items.find(r => r.id === item.id);
+            if (found) return {...item, stock: Math.max(0, item.stock - found.qty)};
+            return item;
+          });
+          if (onSave) onSave(txn, updatedItems);
+          setSaved(true);
+          setTimeout(()=>{
+            setSaved(false);
+            setRows(Array.from({length:20},()=>({...emptyRow})));
+            setHeader({date:today,requesterId:"",requester:"",dept:"",purpose:""});
+            setUserSearch("");
+            if (goToHistory) goToHistory();
+          }, 1200);
+        }}
+          style={{flex:2,background:theme.gradient,color:"#fff",border:"none",borderRadius:10,padding:"13px",fontWeight:700,fontSize:14,cursor:"pointer",boxShadow:"0 4px 14px rgba(139,26,74,0.3)"}}>
+          {saved?"✅ บันทึกสำเร็จ! กำลังไปหน้าประวัติ...":"💾 บันทึกรายการเบิก"}
+        </button>
+        <button onClick={()=>setRows(Array.from({length:20},()=>({...emptyRow})))}
+          style={{flex:1,background:"#fff",color:theme.muted,border:`1.5px solid ${theme.border}`,borderRadius:10,padding:"13px",fontWeight:600,fontSize:13,cursor:"pointer"}}>
+          🗑️ ล้างทั้งหมด
+        </button>
+      </div>
+      {saveError && <div style={{marginTop:10,background:"#FFF8E1",border:"1px solid #FFE082",borderRadius:8,padding:"8px 14px",fontSize:12,color:"#E65100"}}>{saveError}</div>}
+    </div>
+  );
+}
+
+// ─── HISTORY ───
+function HistoryPage({ history, setHistory }) {
+  const [filter, setFilter] = useState("ทั้งหมด");
+  const [delConfirm, setDelConfirm] = useState(null);
+  const [delAll, setDelAll] = useState(false);
+
+  const filtered = filter==="ทั้งหมด" ? history : history.filter(h=>h.type===filter);
+  const sc = s => s==="อนุมัติ"||s==="บันทึกแล้ว"?{bg:"#E8F5E9",text:"#2e7d32"}:s==="คืนแล้ว"?{bg:"#E3F2FD",text:"#1565C0"}:{bg:"#FFF8E1",text:"#E65100"};
+
+  const deleteOne = id => {
+    setHistory(p=>p.filter(h=>h.id!==id));
+    if (window._db) window._db.collection('history').doc(id).delete().catch(console.error);
+    setDelConfirm(null);
+  };
+  const deleteAll = () => {
+    history.forEach(h => {
+      if (window._db) window._db.collection('history').doc(h.id).delete().catch(console.error);
+    });
+    setHistory([]);
+    setDelAll(false);
+  };
+
+  return (
+    <div>
+      {/* Filter + ลบทั้งหมด */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexWrap:"wrap",gap:8}}>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {["ทั้งหมด","เบิก","คืน","รับเข้า"].map(t=>(
+            <button key={t} onClick={()=>setFilter(t)}
+              style={{padding:"6px 14px",borderRadius:20,border:`1.5px solid ${filter===t?theme.primary:theme.border}`,background:filter===t?theme.gradient:"#fff",color:filter===t?"#fff":theme.muted,fontSize:12,fontWeight:filter===t?700:400,cursor:"pointer"}}>
+              {t}
+            </button>
+          ))}
+        </div>
+        {history.length > 0 && (
+          delAll
+            ? <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                <span style={{fontSize:11,color:"#e53935"}}>ลบประวัติทั้งหมด?</span>
+                <button onClick={deleteAll} style={{background:"#e53935",color:"#fff",border:"none",borderRadius:7,padding:"5px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>ยืนยัน</button>
+                <button onClick={()=>setDelAll(false)} style={{background:"#f5f5f5",color:theme.muted,border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,cursor:"pointer"}}>ยกเลิก</button>
+              </div>
+            : <button onClick={()=>setDelAll(true)}
+                style={{background:"#FFEBEE",color:"#e53935",border:"1px solid #FFCDD2",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                🗑️ ลบทั้งหมด
+              </button>
+        )}
+      </div>
+
+      {/* สรุปจำนวน */}
+      <div style={{fontSize:11,color:theme.muted,marginBottom:10}}>แสดง {filtered.length} รายการ {filter!=="ทั้งหมด"?`(กรอง: ${filter})`:`จาก ${history.length} ทั้งหมด`}</div>
+
+      {/* ไม่มีข้อมูล */}
+      {filtered.length===0 && (
+        <div style={{textAlign:"center",padding:48,color:theme.muted,fontSize:13,background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`}}>
+          📭 ไม่มีประวัติในหมวดนี้
+        </div>
+      )}
+
+      {/* รายการ */}
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {filtered.map((tx,i) => {
+          const c=sc(tx.status);
+          return (
+            <div key={tx.id} style={{background:"#fff",borderRadius:12,border:`1px solid ${theme.border}`,padding:"12px 16px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,fontSize:13}}>
+                    {tx.items && tx.items.length>0 ? tx.items.map(i=>i.name).join(", ") : (tx.item || "-")}
+                  </div>
+                  <div style={{fontSize:10,color:theme.muted,marginTop:2}}>{tx.id} · {tx.date}</div>
+                </div>
+                <div style={{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+                  <div style={{fontWeight:800,fontSize:14,color:theme.primary}}>{tx.total.toLocaleString()} ฿</div>
+                  <div style={{fontSize:10,background:c.bg,color:c.text,borderRadius:20,padding:"2px 8px",fontWeight:600}}>{tx.status}</div>
+                </div>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{display:"flex",gap:6}}>
+                  <span style={{fontSize:10,background:tx.type==="เบิก"?theme.light:tx.type==="คืน"?"#E3F2FD":"#E8F5E9",color:tx.type==="เบิก"?theme.primary:tx.type==="คืน"?"#1565C0":"#2e7d32",borderRadius:20,padding:"2px 10px",fontWeight:600}}>{tx.type}</span>
+                  <span style={{fontSize:10,color:theme.muted}}>
+                    {tx.items ? `${tx.items.reduce((s,i)=>s+i.qty,0)} ชิ้น` : `${tx.qty||0} ชิ้น`} · {tx.requester} · {tx.dept}
+                  </span>
+                </div>
+                {/* ปุ่มลบ */}
+                {delConfirm===tx.id
+                  ? <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                      <span style={{fontSize:10,color:"#e53935"}}>ลบ?</span>
+                      <button onClick={()=>deleteOne(tx.id)} style={{background:"#e53935",color:"#fff",border:"none",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>ยืนยัน</button>
+                      <button onClick={()=>setDelConfirm(null)} style={{background:"#f5f5f5",color:theme.muted,border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer"}}>ยกเลิก</button>
+                    </div>
+                  : <button onClick={()=>setDelConfirm(tx.id)}
+                      style={{background:"#FFEBEE",color:"#e53935",border:"1px solid #FFCDD2",borderRadius:7,padding:"4px 10px",fontSize:11,cursor:"pointer",flexShrink:0}}>
+                      🗑️
+                    </button>
+                }
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── REPORTS ───
+function ReportsPage({ stockItems, history }) {
+  // สถิติจาก stockItems จริง
+  const categories = [...new Set(stockItems.map(i=>i.category))];
+  const totalValue = stockItems.reduce((s,i)=>s+i.stock*i.price,0);
+  const totalItems = stockItems.reduce((s,i)=>s+i.stock,0);
+
+  // Pie chart จาก stock จริง
+  const catTotals = categories.map(cat=>({
+    cat,
+    val: stockItems.filter(i=>i.category===cat).reduce((s,i)=>s+i.stock,0)
+  })).filter(c=>c.val>0);
+  const pieTotal = catTotals.reduce((s,c)=>s+c.val,0);
+  const pieColors = ["#1565C0",theme.primary,"#2E7D32","#E65100","#7B1FA2","#00838F","#558B2F","#AD1457"];
+
+  let cumAngle = -90;
+  const pieParts = catTotals.map((c,i)=>{
+    const pct = pieTotal>0?(c.val/pieTotal):0;
+    const angle = pct*360;
+    const start = cumAngle; cumAngle+=angle;
+    const toRad = a=>a*Math.PI/180;
+    const R=60,cx=80,cy=80;
+    const x1=cx+R*Math.cos(toRad(start)),y1=cy+R*Math.sin(toRad(start));
+    const x2=cx+R*Math.cos(toRad(start+angle)),y2=cy+R*Math.sin(toRad(start+angle));
+    return {...c,pct:Math.round(pct*100),color:pieColors[i%pieColors.length],d:`M${cx},${cy} L${x1},${y1} A${R},${R},0,${angle>180?1:0},1,${x2},${y2} Z`};
+  });
+
+  // Top 5 มูลค่า
+  const topValue = [...stockItems].sort((a,b)=>b.stock*b.price-a.stock*a.price).slice(0,5);
+  const maxVal = topValue.length>0?topValue[0].stock*topValue[0].price:1;
+
+  // Top 5 จำนวน
+  const topStock = [...stockItems].sort((a,b)=>b.stock-a.stock).slice(0,5);
+  const maxStock = topStock.length>0?topStock[0].stock:1;
+
+  if (stockItems.length===0) return (
+    <div style={{textAlign:"center",padding:48,background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,color:theme.muted}}>
+      <div style={{fontSize:32,marginBottom:8}}>📊</div>
+      <div style={{fontSize:13}}>ยังไม่มีข้อมูล Stock — กรุณาเพิ่มรายการก่อนครับ</div>
+    </div>
+  );
+
+  return (
+    <div>
+      {/* KPI */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+        {[
+          {icon:"📦",label:"รายการทั้งหมด",value:stockItems.length,unit:"รายการ",color:theme.primary},
+          {icon:"💰",label:"มูลค่ารวม",value:totalValue.toLocaleString(),unit:"บาท",color:"#1565C0"},
+          {icon:"🔢",label:"จำนวนรวม",value:totalItems.toLocaleString(),unit:"ชิ้น",color:"#2E7D32"},
+          {icon:"🗂️",label:"หมวดหมู่",value:categories.length,unit:"หมวด",color:"#E65100"},
+        ].map((c,i)=>(
+          <div key={i} style={{background:"#fff",borderRadius:12,padding:"12px 14px",border:`1px solid ${theme.border}`}}>
+            <div style={{fontSize:20,marginBottom:4}}>{c.icon}</div>
+            <div style={{fontSize:18,fontWeight:800,color:c.color}}>{c.value}</div>
+            <div style={{fontSize:10,color:theme.muted}}>{c.unit}</div>
+            <div style={{fontSize:11,color:theme.text,fontWeight:600,marginTop:2}}>{c.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pie — สัดส่วนหมวดหมู่ */}
+      <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden",marginBottom:14}}>
+        <div style={{background:"linear-gradient(135deg,#2E7D32,#66BB6A)",padding:"10px 16px"}}>
+          <span style={{fontWeight:700,color:"#fff",fontSize:13}}>🥧 สัดส่วน Stock ตามหมวดหมู่</span>
+        </div>
+        {pieTotal===0
+          ? <div style={{padding:24,textAlign:"center",color:theme.muted,fontSize:12}}>ไม่มีข้อมูล</div>
+          : <div style={{padding:16,display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+              <svg width="160" height="160" viewBox="0 0 160 160" style={{flexShrink:0}}>
+                {catTotals.length===1
+                  ? <circle cx="80" cy="80" r="60" fill={pieParts[0].color}/>
+                  : pieParts.map((p,i)=><path key={i} d={p.d} fill={p.color} stroke="#fff" strokeWidth="2"/>)
+                }
+              </svg>
+              <div style={{flex:1}}>
+                {pieParts.map((c,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                    <div style={{width:12,height:12,borderRadius:3,background:c.color,flexShrink:0}}/>
+                    <div style={{fontSize:12,flex:1}}>{c.cat}</div>
+                    <div style={{fontSize:11,color:theme.muted}}>{c.val} ชิ้น</div>
+                    <div style={{fontWeight:700,fontSize:12,color:c.color,minWidth:36,textAlign:"right"}}>{c.pct}%</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+        }
+      </div>
+
+      {/* Top 5 มูลค่า */}
+      <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden",marginBottom:14}}>
+        <div style={{background:"linear-gradient(135deg,#1565C0,#42A5F5)",padding:"10px 16px"}}>
+          <span style={{fontWeight:700,color:"#fff",fontSize:13}}>💎 Top 5 มูลค่าสูงสุด</span>
+        </div>
+        {topValue.map((item,i)=>{
+          const val=item.stock*item.price;
+          const bar=maxVal>0?Math.round((val/maxVal)*100):0;
+          return(
+            <div key={i} style={{padding:"10px 16px",borderBottom:i<topValue.length-1?`1px solid ${theme.border}`:"none"}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontSize:12,fontWeight:600}}>{i+1}. {item.name}</span>
+                <span style={{fontSize:12,fontWeight:800,color:"#1565C0"}}>{val.toLocaleString()} ฿</span>
+              </div>
+              <div style={{background:"#E3F2FD",borderRadius:20,height:6,overflow:"hidden"}}>
+                <div style={{width:`${bar}%`,height:"100%",background:"linear-gradient(90deg,#1565C0,#42A5F5)",borderRadius:20}}/>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Top 5 จำนวน */}
+      <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden",marginBottom:14}}>
+        <div style={{background:"linear-gradient(135deg,#7B1FA2,#CE93D8)",padding:"10px 16px"}}>
+          <span style={{fontWeight:700,color:"#fff",fontSize:13}}>📦 Top 5 จำนวนมากสุด</span>
+        </div>
+        {topStock.map((item,i)=>{
+          const bar=maxStock>0?Math.round((item.stock/maxStock)*100):0;
+          return(
+            <div key={i} style={{padding:"10px 16px",borderBottom:i<topStock.length-1?`1px solid ${theme.border}`:"none"}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontSize:12,fontWeight:600}}>{i+1}. {item.name}</span>
+                <span style={{fontSize:12,fontWeight:800,color:"#7B1FA2"}}>{item.stock} {item.unit}</span>
+              </div>
+              <div style={{background:"#F3E5F5",borderRadius:20,height:6,overflow:"hidden"}}>
+                <div style={{width:`${bar}%`,height:"100%",background:"linear-gradient(90deg,#7B1FA2,#CE93D8)",borderRadius:20}}/>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ตารางสรุปหมวดหมู่ */}
+      <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden"}}>
+        <div style={{background:theme.gradient,padding:"10px 16px"}}>
+          <span style={{fontWeight:700,color:"#fff",fontSize:13}}>🗂️ สรุปมูลค่าตามหมวดหมู่</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",background:theme.light,padding:"6px 14px",borderBottom:`1px solid ${theme.border}`}}>
+          {["หมวดหมู่","รายการ","จำนวน","มูลค่า"].map((h,i)=>(
+            <div key={i} style={{fontSize:10,fontWeight:700,color:theme.primary,textAlign:i>0?"right":"left"}}>{h}</div>
+          ))}
+        </div>
+        {categories.map((cat,i)=>{
+          const its=stockItems.filter(x=>x.category===cat);
+          const qty=its.reduce((s,x)=>s+x.stock,0);
+          const val=its.reduce((s,x)=>s+x.stock*x.price,0);
+          return(
+            <div key={i} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"9px 14px",borderBottom:i<categories.length-1?`1px solid ${theme.border}`:"none",background:i%2===0?"#fff":theme.light}}>
+              <span style={{fontSize:12,fontWeight:600}}>{cat}</span>
+              <span style={{fontSize:12,textAlign:"right",color:theme.muted}}>{its.length}</span>
+              <span style={{fontSize:12,textAlign:"right",color:theme.muted}}>{qty.toLocaleString()}</span>
+              <span style={{fontSize:12,textAlign:"right",fontWeight:700,color:theme.primary}}>{val.toLocaleString()} ฿</span>
+            </div>
+          );
+        })}
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"9px 14px",background:"#F8E8EF",borderTop:`2px solid ${theme.secondary}`}}>
+          <span style={{fontSize:12,fontWeight:800,color:theme.primary}}>รวมทั้งหมด</span>
+          <span style={{fontSize:12,textAlign:"right",fontWeight:700,color:theme.primary}}>{stockItems.length}</span>
+          <span style={{fontSize:12,textAlign:"right",fontWeight:700,color:theme.primary}}>{totalItems.toLocaleString()}</span>
+          <span style={{fontSize:12,textAlign:"right",fontWeight:800,color:theme.primary}}>{totalValue.toLocaleString()} ฿</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── USERS ───
+function UsersPage({ users, setUsers, depts, setDepts }) {
+  const [form, setForm] = useState({name:"",dept:"",role:"Staff",tel:""});
+  const [errors, setErrors] = useState({});
+  const [saved, setSaved] = useState(false);
+  const [delConfirm, setDelConfirm] = useState(null);
+  const [search, setSearch] = useState("");
+  const [newDept, setNewDept] = useState("");
+  const [showDeptMgr, setShowDeptMgr] = useState(false);
+  const [delDeptConfirm, setDelDeptConfirm] = useState(null);
+  const validate=()=>{const e={};if(!form.name.trim())e.name="กรุณากรอกชื่อ-นามสกุล";if(!form.dept)e.dept="กรุณาเลือกแผนก";return e;};
+  const handleAdd=()=>{const e=validate();if(Object.keys(e).length){setErrors(e);return;}setUsers(p=>[...p,{id:"U"+String(p.length+1).padStart(3,"0"),...form}]);setForm({name:"",dept:"",role:"Staff",tel:""});setErrors({});setSaved(true);setTimeout(()=>setSaved(false),2000);};
+  const filtered=users.filter(u=>u.name.includes(search)||u.dept.includes(search)||u.id.includes(search));
+  return (
+    <div>
+      <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden",marginBottom:16}}>
+        <div style={{background:theme.gradient,padding:"10px 16px"}}><span style={{fontWeight:700,color:"#fff",fontSize:13}}>➕ เพิ่มผู้ใช้ใหม่</span></div>
+        <div style={{padding:14}}>
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:11,fontWeight:600,color:theme.primary,display:"block",marginBottom:4}}>ชื่อ-นามสกุล *</label>
+            <input value={form.name} onChange={e=>{setForm(p=>({...p,name:e.target.value}));setErrors(p=>({...p,name:""}));}} placeholder="เช่น สมชาย ใจดี"
+              style={{width:"100%",border:`1.5px solid ${errors.name?"#e53935":theme.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,outline:"none",boxSizing:"border-box",background:"#fafafa"}} />
+            {errors.name&&<div style={{fontSize:10,color:"#e53935",marginTop:3}}>⚠ {errors.name}</div>}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div>
+              <label style={{fontSize:11,fontWeight:600,color:theme.primary,display:"block",marginBottom:4}}>
+                แผนก *
+                <button type="button" onClick={()=>setShowDeptMgr(p=>!p)}
+                  style={{marginLeft:8,fontSize:10,background:showDeptMgr?theme.primary:"#fff",color:showDeptMgr?"#fff":theme.primary,border:`1px solid ${theme.primary}`,borderRadius:6,padding:"1px 8px",cursor:"pointer",fontWeight:600}}>
+                  {showDeptMgr?"✕ ปิด":"⚙️ จัดการ"}
+                </button>
+              </label>
+              <select value={form.dept} onChange={e=>{setForm(p=>({...p,dept:e.target.value}));setErrors(p=>({...p,dept:""}));}}
+                style={{width:"100%",border:`1.5px solid ${errors.dept?"#e53935":theme.border}`,borderRadius:8,padding:"8px 12px",fontSize:12,outline:"none",background:"#fafafa"}}>
+                <option value="">-- เลือกแผนก --</option>
+                {depts.map(d=><option key={d}>{d}</option>)}
+              </select>
+              {errors.dept && <div style={{fontSize:10,color:"#e53935",marginTop:3}}>⚠ {errors.dept}</div>}
+              {showDeptMgr && (
+                <div style={{marginTop:8,background:"#fff",borderRadius:10,border:`1px solid ${theme.border}`,overflow:"hidden"}}>
+                  <div style={{background:"#F8E8EF",padding:"7px 12px",fontWeight:700,fontSize:12,color:theme.primary}}>⚙️ จัดการแผนก</div>
+                  <div style={{padding:"8px 12px",borderBottom:`1px solid ${theme.border}`,display:"flex",gap:6}}>
+                    <input value={newDept} onChange={e=>setNewDept(e.target.value)}
+                      onKeyDown={e=>{if(e.key==="Enter"&&newDept.trim()){if(!depts.includes(newDept.trim())){setDepts(p=>[...p,newDept.trim()]);}setNewDept("");}}}
+                      placeholder="ชื่อแผนกใหม่..."
+                      style={{flex:1,border:`1.5px solid ${theme.border}`,borderRadius:7,padding:"6px 10px",fontSize:12,outline:"none"}}/>
+                    <button onClick={()=>{const t=newDept.trim();if(t&&!depts.includes(t)){setDepts(p=>[...p,t]);}setNewDept("");}}
+                      style={{background:theme.gradient,color:"#fff",border:"none",borderRadius:7,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>+ เพิ่ม</button>
+                  </div>
+                  <div style={{maxHeight:180,overflowY:"auto"}}>
+                    {depts.map(d=>(
+                      <div key={d} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 12px",borderBottom:`1px solid ${theme.border}`,background:"#fff"}}
+                        onMouseEnter={e=>e.currentTarget.style.background=theme.light}
+                        onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                        <span style={{fontSize:12,color:theme.text}}>🏢 {d}</span>
+                        {delDeptConfirm===d
+                          ? <div style={{display:"flex",gap:4}}>
+                              <button onClick={()=>{setDepts(p=>p.filter(x=>x!==d));if(form.dept===d)setForm(p=>({...p,dept:""}));setDelDeptConfirm(null);}}
+                                style={{background:"#e53935",color:"#fff",border:"none",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>ลบ</button>
+                              <button onClick={()=>setDelDeptConfirm(null)}
+                                style={{background:"#f5f5f5",color:theme.muted,border:"none",borderRadius:6,padding:"3px 8px",fontSize:11,cursor:"pointer"}}>ยกเลิก</button>
+                            </div>
+                          : <button onClick={()=>setDelDeptConfirm(d)}
+                              style={{background:"#FFEBEE",color:"#e53935",border:"1px solid #FFCDD2",borderRadius:6,padding:"3px 10px",fontSize:11,cursor:"pointer"}}>🗑️</button>
+                        }
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {errors.dept&&<div style={{fontSize:10,color:"#e53935",marginTop:3}}>⚠ {errors.dept}</div>}
+            </div>
+            <div>
+              <label style={{fontSize:11,fontWeight:600,color:theme.primary,display:"block",marginBottom:4}}>สิทธิ์</label>
+              <div style={{display:"flex",gap:6}}>
+                {["Staff","Admin"].map(r=>(
+                  <button key={r} onClick={()=>setForm(p=>({...p,role:r}))}
+                    style={{flex:1,padding:"8px",borderRadius:8,border:`1.5px solid ${form.role===r?(r==="Admin"?theme.primary:"#2E7D32"):theme.border}`,background:form.role===r?(r==="Admin"?theme.light:"#E8F5E9"):"#fff",color:form.role===r?(r==="Admin"?theme.primary:"#2E7D32"):theme.muted,fontWeight:form.role===r?700:400,fontSize:12,cursor:"pointer"}}>
+                    {r==="Admin"?"👑 Admin":"👤 Staff"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{marginBottom:12}}>
+            <label style={{fontSize:11,fontWeight:600,color:theme.primary,display:"block",marginBottom:4}}>เบอร์โทร</label>
+            <input value={form.tel} onChange={e=>setForm(p=>({...p,tel:e.target.value}))} placeholder="เช่น 081-234-5678"
+              style={{width:"100%",border:`1.5px solid ${theme.border}`,borderRadius:8,padding:"8px 12px",fontSize:13,outline:"none",boxSizing:"border-box",background:"#fafafa"}} />
+          </div>
+          <button onClick={handleAdd} style={{width:"100%",background:theme.gradient,color:"#fff",border:"none",borderRadius:10,padding:"12px",fontWeight:700,fontSize:14,cursor:"pointer",boxShadow:"0 4px 14px rgba(139,26,74,0.25)"}}>
+            {saved?"✅ เพิ่มผู้ใช้สำเร็จ!":"✅ เพิ่มผู้ใช้"}
+          </button>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        {[{label:"ทั้งหมด",count:users.length,color:theme.primary,bg:theme.light},{label:"Admin",count:users.filter(u=>u.role==="Admin").length,color:"#8B1A4A",bg:"#FFF0F5"},{label:"Staff",count:users.filter(u=>u.role==="Staff").length,color:"#2E7D32",bg:"#E8F5E9"}].map((s,i)=>(
+          <div key={i} style={{flex:1,background:s.bg,borderRadius:10,padding:"10px",textAlign:"center",border:`1px solid ${theme.border}`}}>
+            <div style={{fontWeight:800,fontSize:20,color:s.color}}>{s.count}</div>
+            <div style={{fontSize:10,color:theme.muted}}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍 ค้นหาชื่อ, แผนก, รหัส..."
+        style={{width:"100%",border:`1.5px solid ${theme.border}`,borderRadius:10,padding:"10px 14px",fontSize:13,outline:"none",marginBottom:10,boxSizing:"border-box",background:"#fff"}} />
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {filtered.length===0&&<div style={{textAlign:"center",padding:32,color:theme.muted,fontSize:13}}>ไม่พบผู้ใช้ที่ค้นหา</div>}
+        {filtered.map(u=>(
+          <div key={u.id} style={{background:"#fff",borderRadius:12,border:`1px solid ${theme.border}`,padding:"12px 16px",display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:42,height:42,borderRadius:"50%",background:theme.gradient,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:16,flexShrink:0}}>{u.name.charAt(0)}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:13}}>{u.name}</div>
+              <div style={{fontSize:11,color:theme.muted}}>{u.dept} · {u.tel||"ไม่มีเบอร์"}</div>
+              <div style={{fontSize:10,color:theme.muted}}>{u.id}</div>
+            </div>
+            <div style={{fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:20,background:u.role==="Admin"?theme.light:"#E8F5E9",color:u.role==="Admin"?theme.primary:"#2E7D32",border:`1px solid ${u.role==="Admin"?theme.border:"#C8E6C9"}`,whiteSpace:"nowrap"}}>{u.role==="Admin"?"👑":"👤"} {u.role}</div>
+            {delConfirm===u.id
+              ? <div style={{display:"flex",gap:4}}>
+                  <button onClick={()=>{setUsers(p=>p.filter(x=>x.id!==u.id));setDelConfirm(null);}} style={{background:"#e53935",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>ยืนยัน</button>
+                  <button onClick={()=>setDelConfirm(null)} style={{background:"#f5f5f5",color:theme.muted,border:"none",borderRadius:7,padding:"5px 8px",fontSize:11,cursor:"pointer"}}>ยกเลิก</button>
+                </div>
+              : <button onClick={()=>setDelConfirm(u.id)} style={{background:"#FFEBEE",color:"#e53935",border:"1px solid #FFCDD2",borderRadius:8,padding:"6px 10px",fontSize:12,cursor:"pointer",flexShrink:0}}>🗑️</button>
+            }
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+// ─── SUMMARY PAGE ───
+function SummaryPage({ history }) {
+  const [period, setPeriod] = useState("month");
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  });
+  const [selectedYear, setSelectedYear] = useState(() => String(new Date().getFullYear()));
+
+  // กรองเฉพาะประวัติที่เป็น "เบิก"
+  const withdrawHistory = history.filter(h => h.type === "เบิก");
+
+  // กรองตาม period
+  const filtered = withdrawHistory.filter(h => {
+    if (!h.date) return false;
+    if (period === "month") return h.date.startsWith(selectedMonth);
+    if (period === "year")  return h.date.startsWith(selectedYear);
+    return true; // all
+  });
+
+  // คำนวณยอดรวม
+  const totalAmount = filtered.reduce((s,h) => s + (h.total||0), 0);
+  const totalItems  = filtered.reduce((s,h) => s + (h.items ? h.items.reduce((a,i)=>a+i.qty,0) : 0), 0);
+  const totalTxn    = filtered.length;
+
+  // สรุปแยกตามผู้เบิก
+  const byPerson = {};
+  filtered.forEach(h => {
+    const key = h.requester || "ไม่ระบุ";
+    if (!byPerson[key]) byPerson[key] = {name:key, dept:h.dept||"", txn:0, qty:0, amount:0};
+    byPerson[key].txn++;
+    byPerson[key].qty += h.items ? h.items.reduce((a,i)=>a+i.qty,0) : 0;
+    byPerson[key].amount += h.total||0;
+  });
+  const personList = Object.values(byPerson).sort((a,b)=>b.amount-a.amount);
+
+  // สรุปแยกตามรายการ
+  const byItem = {};
+  filtered.forEach(h => {
+    (h.items||[]).forEach(it => {
+      if (!it.name) return;
+      if (!byItem[it.name]) byItem[it.name] = {name:it.name, qty:0, amount:0, times:0};
+      byItem[it.name].qty    += it.qty||0;
+      byItem[it.name].amount += (it.qty||0)*(it.price||0);
+      byItem[it.name].times++;
+    });
+  });
+  const itemList = Object.values(byItem).sort((a,b)=>b.amount-a.amount);
+
+  // สรุปแยกตามแผนก
+  const byDept = {};
+  filtered.forEach(h => {
+    const key = h.dept || "ไม่ระบุ";
+    if (!byDept[key]) byDept[key] = {dept:key, txn:0, amount:0};
+    byDept[key].txn++;
+    byDept[key].amount += h.total||0;
+  });
+  const deptList = Object.values(byDept).sort((a,b)=>b.amount-a.amount);
+
+  // ปีที่มีในประวัติ
+  const years = [...new Set(withdrawHistory.map(h=>h.date?.substring(0,4)).filter(Boolean))].sort((a,b)=>b-a);
+  const months = Array.from({length:12},(_,i)=>{
+    const m = String(i+1).padStart(2,"0");
+    return {val:`${selectedYear}-${m}`, label:`${["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."][i]} ${selectedYear}`};
+  });
+
+  const card = (icon,label,value,unit,color) => (
+    <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(139,26,74,0.07)"}}>
+      <div style={{fontSize:20,marginBottom:4}}>{icon}</div>
+      <div style={{fontSize:18,fontWeight:800,color}}>{value}</div>
+      <div style={{fontSize:10,color:theme.muted}}>{unit}</div>
+      <div style={{fontSize:11,color:theme.text,fontWeight:600,marginTop:2}}>{label}</div>
+    </div>
+  );
+
+  return (
+    <div>
+      {/* Period Selector */}
+      <div style={{background:"#fff",borderRadius:12,padding:14,marginBottom:14,border:`1px solid ${theme.border}`}}>
+        <div style={{fontWeight:700,color:theme.primary,marginBottom:10,fontSize:13}}>📅 เลือกช่วงเวลา</div>
+        <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+          {[{v:"month",l:"รายเดือน"},{v:"year",l:"รายปี"},{v:"all",l:"ทั้งหมด"}].map(p=>(
+            <button key={p.v} onClick={()=>setPeriod(p.v)}
+              style={{padding:"6px 16px",borderRadius:20,border:`1.5px solid ${period===p.v?theme.primary:theme.border}`,background:period===p.v?theme.gradient:"#fff",color:period===p.v?"#fff":theme.muted,fontSize:12,fontWeight:period===p.v?700:400,cursor:"pointer"}}>
+              {p.l}
+            </button>
+          ))}
+        </div>
+        {period==="month" && (
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+            <select value={selectedYear} onChange={e=>{setSelectedYear(e.target.value);setSelectedMonth(`${e.target.value}-${selectedMonth.split("-")[1]}`);}}
+              style={{border:`1.5px solid ${theme.border}`,borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none",background:"#fafafa"}}>
+              {(years.length?years:[String(new Date().getFullYear())]).map(y=><option key={y}>{y}</option>)}
+            </select>
+            <select value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)}
+              style={{border:`1.5px solid ${theme.border}`,borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none",background:"#fafafa",flex:1}}>
+              {months.map(m=><option key={m.val} value={m.val}>{m.label}</option>)}
+            </select>
+          </div>
+        )}
+        {period==="year" && (
+          <select value={selectedYear} onChange={e=>setSelectedYear(e.target.value)}
+            style={{border:`1.5px solid ${theme.border}`,borderRadius:8,padding:"6px 10px",fontSize:12,outline:"none",background:"#fafafa"}}>
+            {(years.length?years:[String(new Date().getFullYear())]).map(y=><option key={y}>{y}</option>)}
+          </select>
+        )}
+      </div>
+
+      {filtered.length===0 ? (
+        <div style={{textAlign:"center",padding:48,background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,color:theme.muted}}>
+          <div style={{fontSize:32,marginBottom:8}}>📭</div>
+          <div style={{fontSize:13}}>ไม่มีข้อมูลการเบิกในช่วงเวลานี้</div>
+        </div>
+      ) : (
+        <>
+          {/* KPI */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+            {card("💸","ยอดเบิกรวม",totalAmount.toLocaleString(),"บาท",theme.primary)}
+            {card("📋","จำนวนครั้งเบิก",totalTxn,"ครั้ง","#1565C0")}
+            {card("📦","จำนวนชิ้นรวม",totalItems.toLocaleString(),"ชิ้น","#2E7D32")}
+            {card("👤","ผู้เบิก",personList.length,"คน","#E65100")}
+          </div>
+
+          {/* กราฟยอดเบิกรายวัน/รายเดือน */}
+          {(()=>{
+            // สร้าง bar chart จากข้อมูลจริง
+            const groupBy = {};
+            filtered.forEach(h => {
+              const key = period==="year" ? h.date?.substring(0,7) : h.date;
+              if (!key) return;
+              if (!groupBy[key]) groupBy[key] = {label:key, amount:0, qty:0};
+              groupBy[key].amount += h.total||0;
+              groupBy[key].qty += h.items ? h.items.reduce((a,i)=>a+i.qty,0) : 0;
+            });
+            const bars = Object.values(groupBy).sort((a,b)=>a.label.localeCompare(b.label));
+            if (bars.length===0) return null;
+            const maxAmt = Math.max(...bars.map(b=>b.amount), 1);
+            const barW = Math.max(24, Math.min(48, Math.floor(300/bars.length)));
+            const barGap = 6;
+            const svgW = (barW+barGap)*bars.length + 20;
+            const barH = 80;
+            const thColors = ["#8B1A4A","#C0305A","#E8527A","#1565C0","#2E7D32","#E65100","#7B1FA2"];
+            return (
+              <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden",marginBottom:14}}>
+                <div style={{background:theme.gradient,padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontWeight:700,color:"#fff",fontSize:13}}>📈 กราฟยอดเบิก{period==="year"?"รายเดือน":"รายวัน"}</span>
+                  <span style={{fontSize:11,color:"rgba(255,255,255,0.8)",background:"rgba(255,255,255,0.15)",borderRadius:20,padding:"2px 10px"}}>{bars.length} {period==="year"?"เดือน":"วัน"}</span>
+                </div>
+                <div style={{padding:16,overflowX:"auto"}}>
+                  <svg width={Math.max(svgW,300)} height={barH+50} style={{display:"block",minWidth:"100%"}}>
+                    <defs>
+                      <linearGradient id="barGradSum" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={theme.accent}/>
+                        <stop offset="100%" stopColor={theme.primary}/>
+                      </linearGradient>
+                    </defs>
+                    {bars.map((b,i)=>{
+                      const h2 = Math.max(4,(b.amount/maxAmt)*barH);
+                      const x = i*(barW+barGap)+10;
+                      const lbl = period==="year" ? b.label.substring(5) : b.label.substring(8);
+                      return (
+                        <g key={i}>
+                          <rect x={x} y={barH-h2} width={barW} height={h2} rx={4} fill="url(#barGradSum)"/>
+                          <text x={x+barW/2} y={barH-h2-5} textAnchor="middle" fontSize="8" fill={theme.primary} fontWeight="700">
+                            {b.amount>=1000?`${(b.amount/1000).toFixed(1)}k`:b.amount}
+                          </text>
+                          <text x={x+barW/2} y={barH+14} textAnchor="middle" fontSize="9" fill={theme.muted}>{lbl}</text>
+                          <text x={x+barW/2} y={barH+26} textAnchor="middle" fontSize="8" fill={theme.muted}>{b.qty}ชิ้น</text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+                {/* ตารางยอดรวม */}
+                <div style={{borderTop:`1px solid ${theme.border}`,padding:"10px 16px",background:theme.light,display:"flex",justifyContent:"space-around",flexWrap:"wrap",gap:8}}>
+                  {[
+                    {label:"สูงสุด",value:Math.max(...bars.map(b=>b.amount)).toLocaleString()+" ฿",color:theme.primary},
+                    {label:"เฉลี่ย/ครั้ง",value:bars.length>0?Math.round(totalAmount/totalTxn).toLocaleString()+" ฿":"0 ฿",color:"#1565C0"},
+                    {label:"ต่ำสุด",value:Math.min(...bars.map(b=>b.amount)).toLocaleString()+" ฿",color:"#2E7D32"},
+                  ].map((s,i)=>(
+                    <div key={i} style={{textAlign:"center"}}>
+                      <div style={{fontSize:13,fontWeight:800,color:s.color}}>{s.value}</div>
+                      <div style={{fontSize:10,color:theme.muted}}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ยอดสรุปรวมใหญ่ */}
+          <div style={{background:theme.gradient,borderRadius:14,padding:"16px 20px",marginBottom:14,boxShadow:"0 4px 16px rgba(139,26,74,0.25)"}}>
+            <div style={{color:"rgba(255,255,255,0.75)",fontSize:11,marginBottom:6}}>
+              ยอดเบิกสรุปรวม {period==="month"?`เดือน ${selectedMonth}`:period==="year"?`ปี ${selectedYear}`:"ทั้งหมด"}
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+              <div>
+                <div style={{fontSize:28,fontWeight:800,color:"#fff"}}>{totalAmount.toLocaleString()}</div>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.75)"}}>บาท</div>
+              </div>
+              <div style={{display:"flex",gap:16}}>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{totalTxn}</div>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.75)"}}>ครั้ง</div>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{totalItems.toLocaleString()}</div>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.75)"}}>ชิ้น</div>
+                </div>
+                <div style={{textAlign:"center"}}>
+                  <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{personList.length}</div>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.75)"}}>ผู้เบิก</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* สรุปแยกตามรายการ */}
+          <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden",marginBottom:14}}>
+            <div style={{background:theme.gradient,padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontWeight:700,color:"#fff",fontSize:13}}>📦 สรุปแยกตามรายการ</span>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.8)",background:"rgba(255,255,255,0.15)",borderRadius:20,padding:"2px 10px"}}>{itemList.length} รายการ</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 60px 80px 90px",background:theme.light,padding:"6px 14px",borderBottom:`1px solid ${theme.border}`}}>
+              {["ชื่อรายการ","จำนวน","ครั้ง","มูลค่า (฿)"].map((h,i)=>(
+                <div key={i} style={{fontSize:10,fontWeight:700,color:theme.primary,textAlign:i>0?"right":"left"}}>{h}</div>
+              ))}
+            </div>
+            {itemList.map((it,i)=>(
+              <div key={i} style={{display:"grid",gridTemplateColumns:"2fr 60px 80px 90px",padding:"9px 14px",borderBottom:i<itemList.length-1?`1px solid ${theme.border}`:"none",background:i%2===0?"#fff":theme.light,alignItems:"center"}}>
+                <div style={{fontSize:12,fontWeight:600,color:theme.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.name}</div>
+                <div style={{fontSize:12,textAlign:"right",color:theme.muted}}>{it.qty.toLocaleString()}</div>
+                <div style={{fontSize:12,textAlign:"right",color:theme.muted}}>{it.times} ครั้ง</div>
+                <div style={{fontSize:12,textAlign:"right",fontWeight:700,color:theme.primary}}>{it.amount.toLocaleString()}</div>
+              </div>
+            ))}
+            <div style={{display:"grid",gridTemplateColumns:"2fr 60px 80px 90px",padding:"10px 14px",background:"#F8E8EF",borderTop:`2px solid ${theme.secondary}`}}>
+              <span style={{fontSize:12,fontWeight:800,color:theme.primary}}>รวมทั้งหมด</span>
+              <span style={{fontSize:12,textAlign:"right",fontWeight:700,color:theme.primary}}>{itemList.reduce((s,i)=>s+i.qty,0).toLocaleString()}</span>
+              <span style={{fontSize:12,textAlign:"right",fontWeight:700,color:theme.primary}}>{itemList.reduce((s,i)=>s+i.times,0)} ครั้ง</span>
+              <span style={{fontSize:12,textAlign:"right",fontWeight:800,color:theme.primary}}>{totalAmount.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* สรุปแยกตามผู้เบิก */}
+          <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden",marginBottom:14}}>
+            <div style={{background:"linear-gradient(135deg,#1565C0,#42A5F5)",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontWeight:700,color:"#fff",fontSize:13}}>👤 สรุปแยกตามผู้เบิก</span>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.8)",background:"rgba(255,255,255,0.15)",borderRadius:20,padding:"2px 10px"}}>{personList.length} คน</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 60px 90px",background:theme.light,padding:"6px 14px",borderBottom:`1px solid ${theme.border}`}}>
+              {["ชื่อผู้เบิก","แผนก","ครั้ง","มูลค่า (฿)"].map((h,i)=>(
+                <div key={i} style={{fontSize:10,fontWeight:700,color:theme.primary,textAlign:i>1?"right":"left"}}>{h}</div>
+              ))}
+            </div>
+            {personList.map((p,i)=>(
+              <div key={i} style={{display:"grid",gridTemplateColumns:"2fr 1fr 60px 90px",padding:"9px 14px",borderBottom:i<personList.length-1?`1px solid ${theme.border}`:"none",background:i%2===0?"#fff":theme.light,alignItems:"center"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:28,height:28,borderRadius:"50%",background:theme.gradient,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:12,flexShrink:0}}>{p.name.charAt(0)}</div>
+                  <span style={{fontSize:12,fontWeight:600}}>{p.name}</span>
+                </div>
+                <div style={{fontSize:11,color:theme.muted}}>{p.dept}</div>
+                <div style={{fontSize:12,textAlign:"right",color:theme.muted}}>{p.txn} ครั้ง</div>
+                <div style={{fontSize:12,textAlign:"right",fontWeight:700,color:"#1565C0"}}>{p.amount.toLocaleString()}</div>
+              </div>
+            ))}
+            <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 60px 90px",padding:"10px 14px",background:"#EEF4FF",borderTop:"2px solid #1565C0"}}>
+              <span style={{fontSize:12,fontWeight:800,color:"#1565C0"}}>รวมทั้งหมด</span>
+              <span></span>
+              <span style={{fontSize:12,textAlign:"right",fontWeight:700,color:"#1565C0"}}>{totalTxn} ครั้ง</span>
+              <span style={{fontSize:12,textAlign:"right",fontWeight:800,color:"#1565C0"}}>{totalAmount.toLocaleString()}</span>
+            </div>
+          </div>
+
+          {/* สรุปแยกตามแผนก */}
+          <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden",marginBottom:14}}>
+            <div style={{background:"linear-gradient(135deg,#2E7D32,#66BB6A)",padding:"10px 16px"}}>
+              <span style={{fontWeight:700,color:"#fff",fontSize:13}}>🏢 สรุปแยกตามแผนก</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 70px 100px",background:theme.light,padding:"6px 14px",borderBottom:`1px solid ${theme.border}`}}>
+              {["แผนก","ครั้ง","มูลค่า (฿)"].map((h,i)=>(
+                <div key={i} style={{fontSize:10,fontWeight:700,color:theme.primary,textAlign:i>0?"right":"left"}}>{h}</div>
+              ))}
+            </div>
+            {deptList.map((d,i)=>{
+              const pct = totalAmount>0 ? Math.round((d.amount/totalAmount)*100) : 0;
+              return (
+                <div key={i} style={{padding:"9px 14px",borderBottom:i<deptList.length-1?`1px solid ${theme.border}`:"none",background:i%2===0?"#fff":theme.light}}>
+                  <div style={{display:"grid",gridTemplateColumns:"2fr 70px 100px",alignItems:"center",marginBottom:4}}>
+                    <span style={{fontSize:12,fontWeight:600}}>{d.dept}</span>
+                    <span style={{fontSize:12,textAlign:"right",color:theme.muted}}>{d.txn} ครั้ง</span>
+                    <span style={{fontSize:12,textAlign:"right",fontWeight:700,color:"#2E7D32"}}>{d.amount.toLocaleString()}</span>
+                  </div>
+                  <div style={{background:"#E8F5E9",borderRadius:20,height:5,overflow:"hidden"}}>
+                    <div style={{width:`${pct}%`,height:"100%",background:"linear-gradient(90deg,#2E7D32,#66BB6A)",borderRadius:20,transition:"width 0.3s"}}/>
+                  </div>
+                  <div style={{fontSize:9,color:theme.muted,textAlign:"right",marginTop:2}}>{pct}%</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* รายการธุรกรรมล่าสุด */}
+          <div style={{background:"#fff",borderRadius:14,border:`1px solid ${theme.border}`,overflow:"hidden"}}>
+            <div style={{background:"linear-gradient(135deg,#7B1FA2,#CE93D8)",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontWeight:700,color:"#fff",fontSize:13}}>📋 รายการเบิกทั้งหมด</span>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.8)",background:"rgba(255,255,255,0.15)",borderRadius:20,padding:"2px 10px"}}>{filtered.length} รายการ</span>
+            </div>
+            {filtered.map((tx,i)=>(
+              <div key={i} style={{padding:"10px 14px",borderBottom:i<filtered.length-1?`1px solid ${theme.border}`:"none",background:i%2===0?"#fff":theme.light}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:theme.text}}>{tx.requester} <span style={{fontWeight:400,color:theme.muted}}>({tx.dept})</span></div>
+                    <div style={{fontSize:10,color:theme.muted}}>{tx.date} · {tx.purpose}</div>
+                  </div>
+                  <div style={{fontWeight:800,fontSize:13,color:theme.primary,whiteSpace:"nowrap"}}>{(tx.total||0).toLocaleString()} ฿</div>
+                </div>
+                {tx.items && tx.items.length>0 && (
+                  <div style={{fontSize:10,color:theme.muted,background:"#fafafa",borderRadius:6,padding:"4px 8px"}}>
+                    {tx.items.filter(it=>it.name).map((it,j)=>(
+                      <span key={j} style={{marginRight:8}}>{it.name} ×{it.qty}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── MAIN APP ───
+const tabs=[
+  {id:"dashboard",label:"🏠",fullLabel:"Dashboard"},
+  {id:"stocklist",label:"📋",fullLabel:"รายการ"},
+  {id:"addstock", label:"➕",fullLabel:"เพิ่ม"},
+  {id:"withdraw", label:"📤",fullLabel:"เบิก"},
+  {id:"history",  label:"📜",fullLabel:"ประวัติ"},
+  {id:"summary",  label:"📑",fullLabel:"สรุป"},
+  {id:"reports",  label:"📊",fullLabel:"รายงาน"},
+  {id:"users",    label:"👥",fullLabel:"ผู้ใช้"},
+];
+const titles={dashboard:"📦 ภาพรวม Stock",stocklist:"📋 รายการ Stock ทั้งหมด",addstock:"➕ เพิ่มรายการ Stock ใหม่",withdraw:"📤 ฟอร์มเบิกอุปกรณ์",history:"📜 ประวัติการเบิก-คืน",summary:"📑 สรุปยอดเบิก",reports:"📊 รายงาน & กราฟ",users:"👥 จัดการผู้ใช้งาน"};
+
+function App() {
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [users, setUsers] = useState([]);
+  const [stockItems, setStockItems] = useState([]);
+  const [categories, setCategories] = useState(initialCategories);
+  const [fbLoaded, setFbLoaded] = useState(false);
+  const [syncing, setSyncing] = useState(true);
+  const [history, setHistory] = useState([]);
+  const [fbError, setFbError] = useState(false);
+  const [depts, setDepts] = useState(initialDepts);
+
+  // โหลดข้อมูลจาก Firebase เมื่อพร้อม
+  useEffect(() => {
+    const init = async () => {
+      if (!window._db) return;
+      setSyncing(true);
+      setFbError(false);
+      try {
+        const [items, us, hist] = await Promise.all([
+          fbLoadAll("stockItems"),
+          fbLoadAll("users"),
+          fbLoadAll("history"),
+        ]);
+        // ใช้ข้อมูลจาก Firebase เสมอ ถ้าไม่มีใน Firebase ค่อยใช้ default
+        setStockItems(items.length > 0 ? items : initialStockItems);
+        setUsers(us.length > 0 ? us : initialUsers);
+        setHistory(hist.length > 0 ? hist.sort((a,b)=>b.id.localeCompare(a.id)) : []);
+        // ถ้า Firebase ว่างเปล่า (ครั้งแรก) ให้ sync ข้อมูล default ขึ้นไป
+        if (items.length === 0) {
+          initialStockItems.forEach(item => fbSaveItem(item).catch(()=>{}));
+        }
+        if (us.length === 0) {
+          initialUsers.forEach(u => fbSaveUser(u).catch(()=>{}));
+        }
+        setFbLoaded(true);
+      } catch(e) {
+        console.error("Firebase error:", e);
+        setFbError(true);
+        // fallback ใช้ข้อมูล default ถ้าเชื่อมต่อไม่ได้
+        setStockItems(initialStockItems);
+        setUsers(initialUsers);
+        setHistory([]);
+      } finally {
+        setSyncing(false);
+      }
+    };
+    // compat version โหลดก่อน babel เสมอ
+    if (window._db) {
+      init();
+    } else {
+      // safety: รอสักครู่แล้วลองใหม่
+      const t = setTimeout(init, 300);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
+  // Wrapper: setStockItems + sync Firebase
+  const setStockItemsSync = (updater) => {
+    setStockItems(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (window._db) {
+        const prevMap = new Map(prev.map(i=>[i.id,i]));
+        const nextIds = new Set(next.map(i=>i.id));
+        // เพิ่ม/อัปเดต เฉพาะที่เปลี่ยน
+        next.forEach(item => {
+          const old = prevMap.get(item.id);
+          if (!old || JSON.stringify(old) !== JSON.stringify(item))
+            fbSaveItem(item).catch(console.error);
+        });
+        // ลบ
+        prev.forEach(item => { if(!nextIds.has(item.id)) fbDeleteItem(item.id).catch(console.error); });
+      }
+      return next;
+    });
+  };
+
+  // Wrapper: setUsers + sync Firebase
+  const setUsersSync = async (updater) => {
+    setUsers(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (window._db) {
+        next.forEach(u => { fbSaveUser(u).catch(console.error); });
+        prev.forEach(u => { if(!next.find(x=>x.id===u.id)) fbDeleteUser(u.id).catch(console.error); });
+      }
+      return next;
+    });
+  };
+
+  // Loading screen ขณะรอ Firebase
+  if (syncing && !fbLoaded && !fbError) return (
+    <div style={{fontFamily:"'Sarabun',sans-serif",background:"#f5f5f7",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
+      <div style={{background:theme.gradient,width:64,height:64,borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,boxShadow:"0 4px 20px rgba(139,26,74,0.3)"}}>📦</div>
+      <div style={{fontWeight:700,fontSize:18,color:theme.primary}}>ระบบจัดการสต๊อก</div>
+      <div style={{fontSize:13,color:theme.muted}}>⏳ กำลังโหลดข้อมูลจาก Firebase...</div>
+      <div style={{width:200,height:4,background:"#F2C4D4",borderRadius:4,overflow:"hidden"}}>
+        <div style={{height:"100%",background:theme.gradient,borderRadius:4,animation:"slide 1.5s infinite",width:"60%"}}/>
+      </div>
+      <style>{`@keyframes slide { 0%{margin-left:-60%} 100%{margin-left:100%} }`}</style>
+    </div>
+  );
+
+  return (
+    <div style={{fontFamily:"'Sarabun',sans-serif",background:"#f5f5f7",minHeight:"100vh"}}>
+      <div style={{background:theme.gradient,padding:"18px 20px 14px",position:"sticky",top:0,zIndex:100,boxShadow:"0 4px 20px rgba(139,26,74,0.25)"}}>
+        <div style={{fontSize:9,color:"rgba(255,255,255,0.6)",letterSpacing:3,textTransform:"uppercase",marginBottom:2}}>STOCK MANAGEMENT SYSTEM</div>
+        <h1 style={{margin:"0 0 2px",fontSize:20,fontWeight:800,color:"#fff"}}>{titles[activeTab]}</h1>
+        <p style={{margin:0,color:"rgba(255,255,255,0.7)",fontSize:11}}>
+          พาส & อุปกรณ์สำนักงาน
+          {syncing && !fbLoaded && <span style={{marginLeft:8,fontSize:10,background:"rgba(255,255,255,0.2)",borderRadius:20,padding:"1px 8px"}}>⏳ กำลังซิงค์...</span>}
+          {fbLoaded && !syncing && <span style={{marginLeft:8,fontSize:10,background:"rgba(255,255,255,0.2)",borderRadius:20,padding:"1px 8px"}}>🔥 Firebase ✅</span>}
+          {fbError && <span style={{marginLeft:8,fontSize:10,background:"rgba(255,100,100,0.3)",borderRadius:20,padding:"1px 8px"}}>⚠️ ออฟไลน์</span>}
+        </p>
+      </div>
+      <div style={{display:"flex",background:"#fff",borderBottom:`2px solid ${theme.border}`,overflowX:"auto",position:"sticky",top:78,zIndex:99,boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        {tabs.map(tab=>(
+          <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
+            style={{flex:"1 0 auto",minWidth:60,padding:"10px 8px 8px",border:"none",background:activeTab===tab.id?theme.light:"transparent",color:activeTab===tab.id?theme.primary:theme.muted,fontWeight:activeTab===tab.id?700:400,fontSize:10,cursor:"pointer",borderBottom:activeTab===tab.id?`3px solid ${theme.primary}`:"3px solid transparent",fontFamily:"'Sarabun',sans-serif",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+            <span style={{fontSize:16}}>{tab.label}</span>
+            <span style={{whiteSpace:"nowrap"}}>{tab.fullLabel}</span>
+          </button>
+        ))}
+      </div>
+      <div style={{padding:"16px 12px 32px",maxWidth:900,margin:"0 auto"}}>
+        {activeTab==="dashboard" && <DashboardPage stockItems={stockItems}/>}
+        {activeTab==="stocklist" && <StockListPage stockItems={stockItems} setStockItems={setStockItemsSync} categories={categories}/>}
+        {activeTab==="addstock"  && <AddStockPage categories={categories} setCategories={setCategories} onAddItem={item=>setStockItemsSync(p=>[...p,item])}/>}
+        {activeTab==="withdraw"  && <WithdrawPage stockItems={stockItems} users={users}
+          onSave={(txn, updatedItems) => {
+            // บันทึกประวัติ
+            setHistory(prev => [txn, ...prev]);
+            if (window._db) window._db.collection('history').doc(txn.id).set(txn).catch(console.error);
+            // ลด stock
+            if (updatedItems) {
+              setStockItemsSync(() => updatedItems);
+            }
+          }}
+          goToHistory={() => setActiveTab("history")}
+        />}
+        {activeTab==="history"   && <HistoryPage history={history} setHistory={setHistory}/>}
+        {activeTab==="summary"   && <SummaryPage history={history}/>}
+        {activeTab==="reports"   && <ReportsPage stockItems={stockItems} history={history}/>}
+        {activeTab==="users"     && <UsersPage users={users} setUsers={setUsersSync} depts={depts} setDepts={setDepts}/>}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<App/>, document.getElementById("root"));
+</script>
+</body>
+</html>
